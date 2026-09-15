@@ -86,12 +86,18 @@ Ordem sequencial sugerida. Marque os itens conforme conclusão.
 
 ## Próxima etapa — Emissão de NF
 
-- [ ] Definir provedor/API fiscal com o cliente
-- [ ] Implementar adapter real de `FiscalEmitterPort`
-- [ ] Persistência `fiscalDocuments`
-- [ ] Fluxo de emissão a partir de venda/despesa/conta a receber
+- [x] Definir provedor/API fiscal com o cliente (Focus NFe, somente NF-e)
+- [x] Implementar adapter mock + HTTP Focus NFe
+- [x] Persistência `fiscalDocuments`
+- [x] Fluxo de emissão automática ao fechar venda
+- [ ] Token/certificado reais + proxy Cloud Function (segurança/CORS)
+- [ ] Homologação live na Focus com certificado
 
 Ver `docs-ia/fiscal_modelagem.md`.
+
+### Seed de validação
+
+- [x] `npm run seed` / `npm run seed:clear` — volume grande cobrindo todos os módulos
 
 ---
 

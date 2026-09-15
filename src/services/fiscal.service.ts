@@ -1,63 +1,56 @@
 import type {
-  FiscalDocumentStatus,
   FiscalInvoiceRequest,
   FiscalInvoiceResult,
 } from '@/domain/types'
 import { AppError } from '@/lib/errors'
+import type { FiscalEmitterPort } from '@/services/fiscal/fiscal.port'
+import { getFocusNfeMode } from '@/services/fiscal/focusNfe.config'
+import { FocusNfeHttpAdapter } from '@/services/fiscal/focusNfe.http.adapter'
+import { FocusNfeMockAdapter } from '@/services/fiscal/focusNfe.mock.adapter'
 
-/**
- * Porta fiscal desacoplada.
- * Não implementa regras NF-e/NFS-e — contrato pronto para API externa.
- */
-export interface FiscalEmitterPort {
-  requestInvoice(payload: FiscalInvoiceRequest): Promise<FiscalInvoiceResult>
-  getStatus?(externalId: string): Promise<FiscalDocumentStatus>
-}
+export type { FiscalEmitterPort } from '@/services/fiscal/fiscal.port'
 
 function validateRequest(payload: FiscalInvoiceRequest): void {
+  if (payload.referenceType !== 'sale') {
+    throw new AppError(
+      'validation',
+      'Somente venda dispara NF-e automática nesta versão.',
+    )
+  }
   if (!payload.referenceId) {
-    throw new AppError('validation', 'Referência do documento é obrigatória.')
+    throw new AppError('validation', 'Referência da venda é obrigatória.')
   }
   if (!(payload.amount > 0)) {
     throw new AppError('validation', 'Valor da emissão deve ser maior que zero.')
   }
-  if (!payload.documentType) {
-    throw new AppError('validation', 'Tipo de documento fiscal é obrigatório.')
+  if (!payload.recipientName.trim()) {
+    throw new AppError('validation', 'Nome do destinatário é obrigatório.')
   }
 }
 
-class StubFiscalEmitter implements FiscalEmitterPort {
-  async requestInvoice(payload: FiscalInvoiceRequest): Promise<FiscalInvoiceResult> {
-    validateRequest(payload)
-
-    return {
-      accepted: false,
-      status: 'draft',
-      message:
-        'Emissor fiscal ainda não integrado. Modelagem pronta para API NF-e/NFS-e.',
-      externalId: null,
-      protocol: null,
-    }
-  }
-
-  async getStatus(): Promise<FiscalDocumentStatus> {
-    return 'draft'
-  }
+function createDefaultEmitter(): FiscalEmitterPort {
+  return getFocusNfeMode() === 'live'
+    ? new FocusNfeHttpAdapter()
+    : new FocusNfeMockAdapter()
 }
 
-let activeEmitter: FiscalEmitterPort = new StubFiscalEmitter()
+let activeEmitter: FiscalEmitterPort = createDefaultEmitter()
 
 export function getFiscalEmitter(): FiscalEmitterPort {
   return activeEmitter
 }
 
-/** Troca o stub pela implementação real da API fiscal quando disponível. */
 export function setFiscalEmitter(emitter: FiscalEmitterPort): void {
   activeEmitter = emitter
+}
+
+export function resetFiscalEmitterFromEnv(): void {
+  activeEmitter = createDefaultEmitter()
 }
 
 export async function prepareFiscalEmission(
   payload: FiscalInvoiceRequest,
 ): Promise<FiscalInvoiceResult> {
+  validateRequest(payload)
   return activeEmitter.requestInvoice(payload)
 }

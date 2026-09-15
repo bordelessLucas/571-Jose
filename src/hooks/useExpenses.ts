@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { Expense, ExpenseInput, FiscalInvoiceResult } from '@/domain/types'
+import type { Expense, ExpenseInput } from '@/domain/types'
 import { AppError } from '@/lib/errors'
 import * as expensesService from '@/services/expenses.service'
-import { prepareFiscalEmission } from '@/services/fiscal.service'
 
 export function useExpenseMutations() {
   const create = useCallback(async (input: ExpenseInput) => {
@@ -17,20 +16,7 @@ export function useExpenseMutations() {
     await expensesService.deleteExpense(id)
   }, [])
 
-  const requestFiscalStub = useCallback(
-    async (expense: Expense): Promise<FiscalInvoiceResult> => {
-      return prepareFiscalEmission({
-        referenceType: 'expense',
-        referenceId: expense.id,
-        documentType: 'nfe',
-        amount: expense.amount,
-        description: expense.description,
-      })
-    },
-    [],
-  )
-
-  return { create, update, remove, requestFiscalStub }
+  return { create, update, remove }
 }
 
 export function useExpenses() {
@@ -89,7 +75,6 @@ export function useExpenses() {
     create,
     update,
     remove,
-    requestFiscalStub: mutations.requestFiscalStub,
   }
 }
 

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import type { Sale } from '@/domain/types'
+import { FISCAL_STATUS_LABELS } from '@/domain/types'
 import { formatCurrency, formatDate } from '@/lib/format'
 import { useSales } from '@/hooks/useSales'
 import { Alert } from '@/presentation/components/ui/Alert'
@@ -21,7 +22,7 @@ export function SalesPage() {
     <div>
       <PageHeader
         title="Vendas"
-        description="Histórico comercial com cliente, vendedor e valor."
+        description="Histórico comercial com NF-e automática (Focus NFe) ao fechar a venda."
         actions={
           <Link to="/vendas/nova">
             <Button>Nova venda</Button>
@@ -50,6 +51,14 @@ export function SalesPage() {
               header: 'Valor',
               align: 'right',
               render: (row) => formatCurrency(row.amount),
+            },
+            {
+              key: 'fiscal',
+              header: 'NF-e',
+              render: (row) =>
+                row.fiscalStatus
+                  ? FISCAL_STATUS_LABELS[row.fiscalStatus]
+                  : '—',
             },
             {
               key: 'actions',

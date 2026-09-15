@@ -40,6 +40,19 @@ export type SellerInput = {
   active: boolean
 }
 
+/** NF-e via Focus NFe (NFS-e fora do escopo atual). */
+export type FiscalDocumentType = 'nfe'
+
+export type FiscalDocumentStatus =
+  | 'draft'
+  | 'queued'
+  | 'authorized'
+  | 'rejected'
+  | 'cancelled'
+  | 'error'
+
+export type FiscalProviderMode = 'mock' | 'live'
+
 export type Sale = {
   id: string
   clientId: string
@@ -49,6 +62,9 @@ export type Sale = {
   amount: number
   description: string
   soldAt: string
+  fiscalDocumentId: string | null
+  fiscalStatus: FiscalDocumentStatus | null
+  fiscalRef: string | null
   createdAt: string
   updatedAt: string
 }
@@ -180,28 +196,17 @@ export type DreSummary = {
   period: DrePeriodFilter | null
 }
 
-/** Tipos de documento fiscal suportados na modelagem (emissão futura). */
-export type FiscalDocumentType = 'nfe' | 'nfse'
-
-export type FiscalDocumentStatus =
-  | 'draft'
-  | 'queued'
-  | 'authorized'
-  | 'rejected'
-  | 'cancelled'
-
-/**
- * Contrato de emissão desacoplado.
- * A integração real com API fiscal virá após o CRUD estar estável.
- */
 export type FiscalInvoiceRequest = {
-  referenceType: 'sale' | 'expense' | 'account_receivable'
+  referenceType: 'sale'
   referenceId: string
   documentType: FiscalDocumentType
   amount: number
   description: string
-  recipientDocument?: string
-  recipientName?: string
+  soldAt: string
+  recipientName: string
+  recipientDocument: string
+  recipientEmail?: string
+  recipientPhone?: string
 }
 
 export type FiscalInvoiceResult = {
@@ -210,6 +215,37 @@ export type FiscalInvoiceResult = {
   message: string
   externalId: string | null
   protocol: string | null
+  focusRef: string
+  providerMode: FiscalProviderMode
+  rawResponse?: unknown
+}
+
+export type FiscalDocument = {
+  id: string
+  focusRef: string
+  referenceType: 'sale'
+  referenceId: string
+  documentType: FiscalDocumentType
+  status: FiscalDocumentStatus
+  providerMode: FiscalProviderMode
+  amount: number
+  description: string
+  recipientName: string
+  recipientDocument: string
+  externalId: string | null
+  protocol: string | null
+  message: string
+  createdAt: string
+  updatedAt: string
+}
+
+export const FISCAL_STATUS_LABELS: Record<FiscalDocumentStatus, string> = {
+  draft: 'Rascunho',
+  queued: 'Em processamento',
+  authorized: 'Autorizada',
+  rejected: 'Rejeitada',
+  cancelled: 'Cancelada',
+  error: 'Erro',
 }
 
 export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {

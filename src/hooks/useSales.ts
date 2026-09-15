@@ -16,7 +16,11 @@ export function useSaleMutations() {
     await salesService.deleteSale(id)
   }, [])
 
-  return { create, update, remove }
+  const reemitNfe = useCallback(async (id: string) => {
+    await salesService.reemitNfeForSale(id)
+  }, [])
+
+  return { create, update, remove, reemitNfe }
 }
 
 export function useSales() {
@@ -74,6 +78,11 @@ export function useSale(id: string | undefined) {
   const [sale, setSale] = useState<Sale | null>(null)
   const [loading, setLoading] = useState(Boolean(id))
   const [error, setError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
+
+  const refresh = useCallback(() => {
+    setReloadKey((value) => value + 1)
+  }, [])
 
   useEffect(() => {
     if (!id) {
@@ -81,6 +90,7 @@ export function useSale(id: string | undefined) {
     }
 
     let active = true
+    setLoading(true)
 
     void salesService
       .getSaleById(id)
@@ -102,11 +112,11 @@ export function useSale(id: string | undefined) {
     return () => {
       active = false
     }
-  }, [id])
+  }, [id, reloadKey])
 
   if (!id) {
-    return { sale: null, loading: false, error: null }
+    return { sale: null, loading: false, error: null, refresh }
   }
 
-  return { sale, loading, error }
+  return { sale, loading, error, refresh }
 }

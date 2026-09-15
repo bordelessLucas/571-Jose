@@ -1,53 +1,46 @@
-# Modelagem — Emissor de Nota Fiscal (preparação)
+# Modelagem — Focus NFe (NF-e)
 
-> Status: **contrato/porta prontos**. Emissão real **ainda não implementada**.
-> Pré-requisito: CRUD operacional estável (concluído nas sprints 1–7).
+> Status: **adapter mock + HTTP prontos**. Emissão automática ao fechar venda.
+> Certificado digital: ainda pendente no cliente. Token: template até Focus liberar.
 
-## Objetivo
+## Decisões confirmadas
 
-Manter a emissão fiscal **desacoplada** do núcleo comercial/financeiro, permitindo
-trocar a API (NF-e / NFS-e) sem alterar telas de venda/despesa.
-
-## Domínio (`src/domain/types`)
-
-| Tipo | Papel |
+| Item | Valor |
 | --- | --- |
-| `FiscalDocumentType` | `nfe` \| `nfse` |
-| `FiscalDocumentStatus` | `draft` \| `queued` \| `authorized` \| `rejected` \| `cancelled` |
-| `FiscalInvoiceRequest` | Payload de emissão (referência, valor, destinatário opcional) |
-| `FiscalInvoiceResult` | Resposta padronizada (status, protocolo, externalId) |
+| Provedor | Focus NFe |
+| Documento | **somente NF-e** (NFS-e fora) |
+| Momento | **automático ao criar/fechar venda** |
+| Certificado | ainda não disponível |
+| Testes | `VITE_FOCUS_NFE_MODE=mock` + token template |
 
-Referências suportadas no request: `sale` | `expense` | `account_receivable`.
+## Variáveis de ambiente
 
-## Porta (`src/services/fiscal.service.ts`)
-
-```ts
-interface FiscalEmitterPort {
-  requestInvoice(payload): Promise<FiscalInvoiceResult>
-  getStatus?(externalId): Promise<FiscalDocumentStatus>
-}
+```env
+VITE_FOCUS_NFE_MODE=mock|live
+VITE_FOCUS_NFE_ENV=homologacao|producao
+VITE_FOCUS_NFE_TOKEN=FOCUS_NFE_TOKEN_TEMPLATE_REPLACE_ME
+VITE_EMITENTE_*   # dados cadastrais do emitente
 ```
 
-- Implementação atual: `StubFiscalEmitter` (não chama API externa).
-- Troca futura: `setFiscalEmitter(realAdapter)`.
+## Arquitetura
 
-## Fluxo alvo (próxima etapa)
+```
+sales.service.createSale
+  → prepareFiscalEmission (porta)
+      → FocusNfeMockAdapter  (default)
+      → FocusNfeHttpAdapter  (live)
+  → fiscalDocuments (Firestore)
+  → atualiza sale.fiscalStatus / fiscalRef
+```
 
-1. Usuário aciona emissão a partir de Venda / Despesa / Conta a receber.
-2. Hook chama `prepareFiscalEmission` (nunca Firebase/UI direto na API fiscal).
-3. Adapter envia para provedor (Focus NFe, NFe.io, Bling, SEFAZ direto, etc.).
-4. Persistir retorno em collection `fiscalDocuments` (a criar na sprint fiscal).
-5. Atualizar status assíncrono via webhook ou polling (`getStatus`).
+## Segurança
 
-## O que NÃO fazer agora
+- Token Focus **não deve** ficar só no browser em produção.
+- Chamada HTTP direta pode falhar por **CORS**.
+- Próximo passo operacional: proxy em Cloud Function com secret `FOCUS_NFE_TOKEN`.
 
-- Regras fiscais (CFOP, CST, impostos, município).
-- Certificado digital A1/A3.
-- Comunicação SEFAZ sem provedor definido.
+## Como testar
 
-## Impedimentos a esclarecer com o cliente / time
-
-1. Qual **provedor/API** de NF-e/NFS-e será usado?
-2. Empresa emite **NF-e**, **NFS-e** ou ambos?
-3. Há **certificado digital** e ambiente (homologação/produção)?
-4. Emissão é **manual sob demanda** ou automática ao fechar venda?
+1. `npm run seed:clear` — popula volume grande com NF-e mock.
+2. Criar venda no app → status NF-e aparece na listagem/detalhe.
+3. Quando tiver token real: trocar `VITE_FOCUS_NFE_MODE=live` e o token (idealmente via proxy).

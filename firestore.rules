@@ -39,5 +39,9 @@ service cloud.firestore {
     match /inventoryItems/{id} {
       allow read, write: if isSignedIn();
     }
+
+    match /fiscalDocuments/{id} {
+      allow read, write: if isSignedIn();
+    }
   }
 }

@@ -10,9 +10,11 @@ import {
   serverTimestamp,
   updateDoc,
 } from 'firebase/firestore'
-import type { Sale, SaleInput } from '@/domain/types'
+import type { Client, Sale, SaleInput } from '@/domain/types'
 import { AppError, toAppError } from '@/lib/errors'
 import { getClientById } from '@/services/clients.service'
+import { prepareFiscalEmission } from '@/services/fiscal.service'
+import { createFiscalDocument } from '@/services/fiscalDocuments.service'
 import { db } from '@/services/firebase'
 import {
   mapDocId,
@@ -40,6 +42,7 @@ function validateInput(input: SaleInput): void {
 }
 
 function mapSale(id: string, data: Record<string, unknown>): Sale {
+  const fiscalStatusRaw = requireString(data, 'fiscalStatus')
   return {
     id,
     clientId: requireString(data, 'clientId'),
@@ -49,17 +52,18 @@ function mapSale(id: string, data: Record<string, unknown>): Sale {
     amount: requireNumber(data, 'amount'),
     description: requireString(data, 'description'),
     soldAt: requireString(data, 'soldAt'),
+    fiscalDocumentId: requireString(data, 'fiscalDocumentId') || null,
+    fiscalStatus: fiscalStatusRaw
+      ? (fiscalStatusRaw as Sale['fiscalStatus'])
+      : null,
+    fiscalRef: requireString(data, 'fiscalRef') || null,
     createdAt: toIsoString(data.createdAt),
     updatedAt: toIsoString(data.updatedAt),
   }
 }
 
-/**
- * Valida consistência cliente/vendedor antes de gravar.
- * Em produção, espelhar esta regra em Cloud Functions.
- */
 async function resolveSaleRelations(input: SaleInput): Promise<{
-  clientName: string
+  client: Client
   sellerName: string
 }> {
   const [client, seller] = await Promise.all([
@@ -72,9 +76,46 @@ async function resolveSaleRelations(input: SaleInput): Promise<{
   }
 
   return {
-    clientName: client.name,
+    client,
     sellerName: seller.name,
   }
+}
+
+/**
+ * Emissão automática de NF-e ao fechar a venda (Focus NFe mock/live).
+ * Falha fiscal NÃO desfaz a venda — grava status na venda e em fiscalDocuments.
+ */
+async function emitNfeForSale(saleId: string, input: SaleInput, client: Client) {
+  const result = await prepareFiscalEmission({
+    referenceType: 'sale',
+    referenceId: saleId,
+    documentType: 'nfe',
+    amount: input.amount,
+    description: input.description.trim() || `Venda ${saleId}`,
+    soldAt: input.soldAt,
+    recipientName: client.name,
+    recipientDocument: client.document || '00000000000',
+    recipientEmail: client.email,
+    recipientPhone: client.phone,
+  })
+
+  const fiscalDocumentId = await createFiscalDocument({
+    result,
+    referenceId: saleId,
+    amount: input.amount,
+    description: input.description.trim() || `Venda ${saleId}`,
+    recipientName: client.name,
+    recipientDocument: client.document || '00000000000',
+  })
+
+  await updateDoc(doc(db, COLLECTION, saleId), {
+    fiscalDocumentId,
+    fiscalStatus: result.status,
+    fiscalRef: result.focusRef,
+    updatedAt: serverTimestamp(),
+  })
+
+  return result
 }
 
 export async function listSales(): Promise<Sale[]> {
@@ -107,15 +148,30 @@ export async function createSale(input: SaleInput): Promise<string> {
     const relations = await resolveSaleRelations(input)
     const ref = await addDoc(collection(db, COLLECTION), {
       clientId: input.clientId,
-      clientName: relations.clientName,
+      clientName: relations.client.name,
       sellerId: input.sellerId,
       sellerName: relations.sellerName,
       amount: input.amount,
       description: input.description.trim(),
       soldAt: input.soldAt,
+      fiscalDocumentId: null,
+      fiscalStatus: null,
+      fiscalRef: null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })
+
+    try {
+      await emitNfeForSale(ref.id, input, relations.client)
+    } catch (fiscalError) {
+      await updateDoc(doc(db, COLLECTION, ref.id), {
+        fiscalStatus: 'error',
+        fiscalRef: `sale-${ref.id}`,
+        updatedAt: serverTimestamp(),
+      })
+      console.error('Falha na emissão automática de NF-e:', fiscalError)
+    }
+
     return ref.id
   } catch (error) {
     throw toAppError(error, 'Não foi possível registrar a venda.')
@@ -129,7 +185,7 @@ export async function updateSale(id: string, input: SaleInput): Promise<void> {
     const relations = await resolveSaleRelations(input)
     await updateDoc(doc(db, COLLECTION, id), {
       clientId: input.clientId,
-      clientName: relations.clientName,
+      clientName: relations.client.name,
       sellerId: input.sellerId,
       sellerName: relations.sellerName,
       amount: input.amount,
@@ -148,4 +204,17 @@ export async function deleteSale(id: string): Promise<void> {
   } catch (error) {
     throw toAppError(error, 'Não foi possível excluir a venda.')
   }
+}
+
+/** Reprocessa NF-e de uma venda já existente. */
+export async function reemitNfeForSale(saleId: string): Promise<void> {
+  const sale = await getSaleById(saleId)
+  const client = await getClientById(sale.clientId)
+  await emitNfeForSale(saleId, {
+    clientId: sale.clientId,
+    sellerId: sale.sellerId,
+    amount: sale.amount,
+    description: sale.description,
+    soldAt: sale.soldAt,
+  }, client)
 }

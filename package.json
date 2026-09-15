@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "seed": "node scripts/seed.mjs",
+    "seed:clear": "node scripts/seed.mjs --clear"
   },
   "dependencies": {
     "firebase": "^12.19.0",

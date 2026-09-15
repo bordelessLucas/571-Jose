@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { Expense } from '@/domain/types'
 import { EXPENSE_CATEGORY_LABELS } from '@/domain/types'
@@ -11,18 +10,12 @@ import { PageHeader } from '@/presentation/components/ui/PageHeader'
 import { Spinner } from '@/presentation/components/ui/Spinner'
 
 export function ExpensesPage() {
-  const { expenses, loading, error, remove, requestFiscalStub } = useExpenses()
-  const [fiscalMessage, setFiscalMessage] = useState<string | null>(null)
+  const { expenses, loading, error, remove } = useExpenses()
 
   async function handleDelete(expense: Expense) {
     const confirmed = window.confirm('Excluir esta despesa?')
     if (!confirmed) return
     await remove(expense.id)
-  }
-
-  async function handleFiscalStub(expense: Expense) {
-    const result = await requestFiscalStub(expense)
-    setFiscalMessage(result.message)
   }
 
   return (
@@ -38,7 +31,6 @@ export function ExpensesPage() {
       />
 
       {error ? <Alert tone="danger">{error}</Alert> : null}
-      {fiscalMessage ? <Alert tone="info">{fiscalMessage}</Alert> : null}
       {loading ? <Spinner /> : null}
 
       {!loading ? (
@@ -77,14 +69,6 @@ export function ExpensesPage() {
                   <Link to={`/despesas/${row.id}`}>
                     <Button variant="ghost">Editar</Button>
                   </Link>
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      void handleFiscalStub(row)
-                    }}
-                  >
-                    NF (stub)
-                  </Button>
                   <Button
                     variant="danger"
                     onClick={() => {
