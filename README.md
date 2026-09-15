@@ -7,6 +7,9 @@ Sistema de gestão (MVP) com **React + TypeScript + Vite + Tailwind + Firebase**
 - [docs-ia/escopo.md](docs-ia/escopo.md)
 - [docs-ia/design_system.md](docs-ia/design_system.md)
 - [docs-ia/checklist_sprints.md](docs-ia/checklist_sprints.md)
+- [docs-ia/fiscal_modelagem.md](docs-ia/fiscal_modelagem.md)
+- [docs-ia/ux_review.md](docs-ia/ux_review.md)
+- [docs-ia/relatorio_chat_implementacao.md](docs-ia/relatorio_chat_implementacao.md)
 
 ## Setup local
 
