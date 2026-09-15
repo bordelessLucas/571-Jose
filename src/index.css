@@ -1,0 +1,55 @@
+@import 'tailwindcss';
+
+:root {
+  /* Tokens alinhados a docs-ia/design_system.md */
+  --color-bg: #f3f5f7;
+  --color-surface: #ffffff;
+  --color-surface-muted: #e8edf2;
+  --color-border: #cfd8e3;
+  --color-text: #1a2332;
+  --color-text-muted: #5b6b7c;
+  --color-primary: #0f4c5c;
+  --color-primary-hover: #0a3641;
+  --color-accent: #e36414;
+  --color-success: #2a9d8f;
+  --color-warning: #e9c46a;
+  --color-danger: #c1121f;
+
+  --font-sans: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-8: 3rem;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  background-color: var(--color-bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100svh;
+}
+
+#root {
+  min-height: 100svh;
+}
