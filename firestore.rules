@@ -23,5 +23,21 @@ service cloud.firestore {
     match /expenses/{id} {
       allow read, write: if isSignedIn();
     }
+
+    match /accountsPayable/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /accountsReceivable/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /cashMovements/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /inventoryItems/{id} {
+      allow read, write: if isSignedIn();
+    }
   }
 }

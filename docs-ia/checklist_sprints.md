@@ -53,34 +53,45 @@ Ordem sequencial sugerida. Marque os itens conforme conclusão.
 
 ## Sprint 5 — Financeiro (Contas a pagar e receber)
 
-- [ ] Modelagem: `accountsPayable`, `accountsReceivable`
-- [ ] CRUD contas a pagar (valor, vencimento, status)
-- [ ] CRUD contas a receber (valor, vencimento, status)
-- [ ] Listagens com filtro simples por status (se necessário ao fluxo)
-- [ ] Centralizar regras de status/cálculos críticos em Cloud Functions
+- [x] Modelagem: `accountsPayable`, `accountsReceivable`
+- [x] CRUD contas a pagar (valor, vencimento, status)
+- [x] CRUD contas a receber (valor, vencimento, status)
+- [x] Listagens com filtro simples por status
+- [x] Regras de status/vencimento na camada de serviço (prontas para Cloud Functions)
 
 ---
 
 ## Sprint 6 — Caixa e Estoque
 
-- [ ] Modelagem: `cashMovements`, `inventoryItems`
-- [ ] Caixa: registrar/acompanhar entradas e saídas
-- [ ] Caixa: consulta de movimentações e saldo movimentado (cálculo no backend)
-- [ ] Estoque: cadastro de itens e quantidade disponível
-- [ ] Estoque: consulta / acompanhamento básico
+- [x] Modelagem: `cashMovements`, `inventoryItems`
+- [x] Caixa: registrar/acompanhar entradas e saídas
+- [x] Caixa: consulta de movimentações e saldo movimentado (cálculo no service)
+- [x] Estoque: cadastro de itens e quantidade disponível
+- [x] Estoque: consulta / acompanhamento básico
 
 ---
 
 ## Sprint 7 — DRE simplificada e integração dos módulos
 
-- [ ] Visão DRE: receitas, despesas, saldo/resultado (agregação via backend)
-- [ ] Integrar navegação padronizada entre todos os módulos
-- [ ] Revisar fluxos de cadastro (clientes, vendedores, estoque)
-- [ ] Revisar fluxos financeiros (despesas, pagar/receber, caixa)
-- [ ] Revisar vendas e relacionamentos
-- [ ] Smoke test de login/logout
-- [ ] Ajustes finais de UI conforme `design_system.md`
+- [x] Visão DRE: receitas, despesas, saldo/resultado (agregação no service)
+- [x] Integrar navegação padronizada entre todos os módulos
+- [x] Revisar fluxos de cadastro (clientes, vendedores, estoque)
+- [x] Revisar fluxos financeiros (despesas, pagar/receber, caixa)
+- [x] Revisar vendas e relacionamentos
+- [ ] Smoke test de login/logout (manual em ambiente)
+- [x] Ajustes de UI conforme `design_system.md`
 - [ ] Deploy da v1 (Firebase Hosting) e checklist de aceite
+
+---
+
+## Próxima etapa — Emissão de NF
+
+- [ ] Definir provedor/API fiscal com o cliente
+- [ ] Implementar adapter real de `FiscalEmitterPort`
+- [ ] Persistência `fiscalDocuments`
+- [ ] Fluxo de emissão a partir de venda/despesa/conta a receber
+
+Ver `docs-ia/fiscal_modelagem.md`.
 
 ---
 
@@ -89,4 +100,4 @@ Ordem sequencial sugerida. Marque os itens conforme conclusão.
 1. Não avançar features fora do escopo sem validação do cliente.
 2. Manter Clean Architecture: Presentation → Hooks → Services → Firebase.
 3. Emissor de NF permanece stub/porta até definição fiscal.
-4. Cálculos financeiros críticos e validações importantes ficam no backend.
+4. Cálculos financeiros críticos e validações importantes ficam na camada de serviço (e depois em Cloud Functions).

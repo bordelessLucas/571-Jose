@@ -6,10 +6,14 @@ const MODULES = [
   { to: '/vendedores', title: 'Vendedores', description: 'Equipe comercial' },
   { to: '/vendas', title: 'Vendas', description: 'Registros e histórico comercial' },
   { to: '/despesas', title: 'Despesas', description: 'Lançamentos e categorias' },
-  { to: '/financeiro', title: 'Financeiro', description: 'Contas a pagar e receber (próximas sprints)' },
-  { to: '/estoque', title: 'Estoque', description: 'Itens e quantidades (próximas sprints)' },
-  { to: '/caixa', title: 'Caixa', description: 'Entradas e saídas (próximas sprints)' },
-  { to: '/dre', title: 'DRE', description: 'Visão simplificada (próximas sprints)' },
+  {
+    to: '/financeiro',
+    title: 'Financeiro',
+    description: 'Contas a pagar e a receber',
+  },
+  { to: '/estoque', title: 'Estoque', description: 'Itens e quantidades' },
+  { to: '/caixa', title: 'Caixa', description: 'Entradas, saídas e saldo' },
+  { to: '/dre', title: 'DRE', description: 'Receitas, despesas e resultado' },
 ] as const
 
 export function DashboardPage() {

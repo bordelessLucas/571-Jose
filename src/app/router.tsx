@@ -3,13 +3,22 @@ import {
   AppShell,
   ProtectedRoute,
 } from '@/presentation/components/layout/AppShell'
+import { CashFormPage } from '@/presentation/pages/cash/CashFormPage'
+import { CashPage } from '@/presentation/pages/cash/CashPage'
 import { ClientFormPage } from '@/presentation/pages/clients/ClientFormPage'
 import { ClientsPage } from '@/presentation/pages/clients/ClientsPage'
 import { DashboardPage } from '@/presentation/pages/DashboardPage'
+import { DrePage } from '@/presentation/pages/dre/DrePage'
 import { ExpenseFormPage } from '@/presentation/pages/expenses/ExpenseFormPage'
 import { ExpensesPage } from '@/presentation/pages/expenses/ExpensesPage'
+import { AccountPayableFormPage } from '@/presentation/pages/finance/AccountPayableFormPage'
+import { AccountReceivableFormPage } from '@/presentation/pages/finance/AccountReceivableFormPage'
+import { AccountsPayablePage } from '@/presentation/pages/finance/AccountsPayablePage'
+import { AccountsReceivablePage } from '@/presentation/pages/finance/AccountsReceivablePage'
+import { FinanceHubPage } from '@/presentation/pages/finance/FinanceHubPage'
+import { InventoryFormPage } from '@/presentation/pages/inventory/InventoryFormPage'
+import { InventoryPage } from '@/presentation/pages/inventory/InventoryPage'
 import { LoginPage } from '@/presentation/pages/LoginPage'
-import { ModulePlaceholderPage } from '@/presentation/pages/ModulePlaceholderPage'
 import { SaleDetailPage } from '@/presentation/pages/sales/SaleDetailPage'
 import { SaleFormPage } from '@/presentation/pages/sales/SaleFormPage'
 import { SalesPage } from '@/presentation/pages/sales/SalesPage'
@@ -37,42 +46,26 @@ export function AppRouter() {
           <Route path="despesas" element={<ExpensesPage />} />
           <Route path="despesas/nova" element={<ExpenseFormPage />} />
           <Route path="despesas/:id" element={<ExpenseFormPage />} />
+          <Route path="financeiro" element={<FinanceHubPage />} />
+          <Route path="financeiro/pagar" element={<AccountsPayablePage />} />
+          <Route path="financeiro/pagar/novo" element={<AccountPayableFormPage />} />
+          <Route path="financeiro/pagar/:id" element={<AccountPayableFormPage />} />
+          <Route path="financeiro/receber" element={<AccountsReceivablePage />} />
           <Route
-            path="financeiro"
-            element={
-              <ModulePlaceholderPage
-                title="Financeiro"
-                description="Contas a pagar e receber — Sprint 5."
-              />
-            }
+            path="financeiro/receber/novo"
+            element={<AccountReceivableFormPage />}
           />
           <Route
-            path="estoque"
-            element={
-              <ModulePlaceholderPage
-                title="Estoque"
-                description="Cadastro e acompanhamento de itens — Sprint 6."
-              />
-            }
+            path="financeiro/receber/:id"
+            element={<AccountReceivableFormPage />}
           />
-          <Route
-            path="caixa"
-            element={
-              <ModulePlaceholderPage
-                title="Caixa"
-                description="Entradas, saídas e saldo — Sprint 6."
-              />
-            }
-          />
-          <Route
-            path="dre"
-            element={
-              <ModulePlaceholderPage
-                title="DRE"
-                description="Receitas, despesas e resultado — Sprint 7."
-              />
-            }
-          />
+          <Route path="estoque" element={<InventoryPage />} />
+          <Route path="estoque/novo" element={<InventoryFormPage />} />
+          <Route path="estoque/:id" element={<InventoryFormPage />} />
+          <Route path="caixa" element={<CashPage />} />
+          <Route path="caixa/nova" element={<CashFormPage />} />
+          <Route path="caixa/:id" element={<CashFormPage />} />
+          <Route path="dre" element={<DrePage />} />
         </Route>
       </Route>
 

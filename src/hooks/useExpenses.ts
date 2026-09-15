@@ -22,6 +22,7 @@ export function useExpenseMutations() {
       return prepareFiscalEmission({
         referenceType: 'expense',
         referenceId: expense.id,
+        documentType: 'nfe',
         amount: expense.amount,
         description: expense.description,
       })
