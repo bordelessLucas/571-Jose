@@ -35,6 +35,7 @@ export function AccountsReceivablePage() {
       <PageHeader
         title="Contas a receber"
         description="Lançamentos com valor, vencimento e status."
+        backTo="/financeiro"
         actions={
           <Link to="/financeiro/receber/novo">
             <Button>Nova conta</Button>
@@ -92,7 +93,7 @@ export function AccountsReceivablePage() {
               header: 'Ações',
               align: 'right',
               render: (row) => (
-                <div className="flex justify-end gap-2">
+                <div className="flex flex-wrap justify-end gap-2">
                   <Link to={`/financeiro/receber/${row.id}`}>
                     <Button variant="ghost">Editar</Button>
                   </Link>

@@ -207,6 +207,8 @@ export type FiscalInvoiceRequest = {
   recipientDocument: string
   recipientEmail?: string
   recipientPhone?: string
+  /** Quando true, gera nova ref Focus e cancela docs ativos anteriores. */
+  reissue?: boolean
 }
 
 export type FiscalInvoiceResult = {

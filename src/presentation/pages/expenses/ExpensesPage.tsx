@@ -23,6 +23,7 @@ export function ExpensesPage() {
       <PageHeader
         title="Despesas"
         description="Lançamentos com descrição, categoria, valor e data."
+        showDashboard
         actions={
           <Link to="/despesas/nova">
             <Button>Nova despesa</Button>
@@ -65,7 +66,7 @@ export function ExpensesPage() {
               header: 'Ações',
               align: 'right',
               render: (row) => (
-                <div className="flex justify-end gap-2">
+                <div className="flex flex-wrap justify-end gap-2">
                   <Link to={`/despesas/${row.id}`}>
                     <Button variant="ghost">Editar</Button>
                   </Link>

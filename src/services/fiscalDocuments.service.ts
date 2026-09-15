@@ -107,18 +107,26 @@ export async function listFiscalDocumentsBySale(
   }
 }
 
-export async function updateFiscalDocumentStatus(
-  id: string,
-  status: FiscalDocument['status'],
-  message: string,
-): Promise<void> {
+export async function cancelActiveFiscalDocumentsForSale(
+  saleId: string,
+  reason: string,
+): Promise<number> {
   try {
-    await updateDoc(doc(db, COLLECTION, id), {
-      status,
-      message,
-      updatedAt: serverTimestamp(),
-    })
+    const docs = await listFiscalDocumentsBySale(saleId)
+    const active = docs.filter((item) => item.status !== 'cancelled')
+
+    await Promise.all(
+      active.map((item) =>
+        updateDoc(doc(db, COLLECTION, item.id), {
+          status: 'cancelled',
+          message: reason,
+          updatedAt: serverTimestamp(),
+        }),
+      ),
+    )
+
+    return active.length
   } catch (error) {
-    throw toAppError(error, 'Não foi possível atualizar o documento fiscal.')
+    throw toAppError(error, 'Não foi possível cancelar documentos fiscais anteriores.')
   }
 }

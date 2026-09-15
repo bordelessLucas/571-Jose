@@ -23,6 +23,7 @@ export function SalesPage() {
       <PageHeader
         title="Vendas"
         description="Histórico comercial com NF-e automática (Focus NFe) ao fechar a venda."
+        showDashboard
         actions={
           <Link to="/vendas/nova">
             <Button>Nova venda</Button>
@@ -65,7 +66,7 @@ export function SalesPage() {
               header: 'Ações',
               align: 'right',
               render: (row) => (
-                <div className="flex justify-end gap-2">
+                <div className="flex flex-wrap justify-end gap-2">
                   <Link to={`/vendas/${row.id}`}>
                     <Button variant="ghost">Detalhes</Button>
                   </Link>

@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import type { Sale, SaleInput } from '@/domain/types'
 import { AppError } from '@/lib/errors'
 import { todayInputValue } from '@/lib/format'
@@ -177,11 +177,7 @@ export function SaleFormPage() {
       <PageHeader
         title={isEdit ? 'Editar venda' : 'Nova venda'}
         description="Selecione cliente e vendedor e informe o valor."
-        actions={
-          <Link to="/vendas">
-            <Button variant="secondary">Voltar</Button>
-          </Link>
-        }
+        backTo={isEdit && id ? `/vendas/${id}` : '/vendas'}
       />
 
       <SaleFormFields

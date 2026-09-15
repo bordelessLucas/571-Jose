@@ -21,6 +21,7 @@ export function ClientsPage() {
       <PageHeader
         title="Clientes"
         description="Cadastro e consulta dos clientes utilizados nas vendas."
+        showDashboard
         actions={
           <Link to="/clientes/novo">
             <Button>Novo cliente</Button>
@@ -50,7 +51,7 @@ export function ClientsPage() {
               header: 'Ações',
               align: 'right',
               render: (row) => (
-                <div className="flex justify-end gap-2">
+                <div className="flex flex-wrap justify-end gap-2">
                   <Link to={`/clientes/${row.id}`}>
                     <Button variant="ghost">Editar</Button>
                   </Link>

@@ -9,7 +9,10 @@ import { buildFocusRef, mapSaleToFocusNfePayload } from '@/services/fiscal/focus
  */
 export class FocusNfeMockAdapter implements FiscalEmitterPort {
   async requestInvoice(payload: FiscalInvoiceRequest): Promise<FiscalInvoiceResult> {
-    const focusRef = buildFocusRef(payload.referenceId)
+    const focusRef = buildFocusRef(
+      payload.referenceId,
+      Boolean(payload.reissue),
+    )
     const mapped = mapSaleToFocusNfePayload(payload)
 
     // Valida payload mínimo (espelha rejeição da Focus)

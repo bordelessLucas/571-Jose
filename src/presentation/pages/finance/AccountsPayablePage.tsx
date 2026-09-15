@@ -36,6 +36,7 @@ export function AccountsPayablePage() {
       <PageHeader
         title="Contas a pagar"
         description="Lançamentos com valor, vencimento e status."
+        backTo="/financeiro"
         actions={
           <Link to="/financeiro/pagar/novo">
             <Button>Nova conta</Button>
@@ -93,7 +94,7 @@ export function AccountsPayablePage() {
               header: 'Ações',
               align: 'right',
               render: (row) => (
-                <div className="flex justify-end gap-2">
+                <div className="flex flex-wrap justify-end gap-2">
                   <Link to={`/financeiro/pagar/${row.id}`}>
                     <Button variant="ghost">Editar</Button>
                   </Link>

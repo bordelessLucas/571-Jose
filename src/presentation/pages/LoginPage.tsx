@@ -38,7 +38,11 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-svh items-center justify-center bg-[var(--color-bg)] p-4">
+    <div className="relative flex min-h-svh items-center justify-center bg-[var(--color-bg)] p-4">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-[var(--color-primary)]"
+      />
       <form
         onSubmit={(event) => {
           void handleSubmit(event)
@@ -48,11 +52,11 @@ export function LoginPage() {
         <p className="text-xs font-medium tracking-wide text-[var(--color-text-muted)] uppercase">
           José
         </p>
-        <h1 className="mt-2 text-2xl font-semibold text-[var(--color-primary)]">
-          Acesso ao sistema
+        <h1 className="mt-1 text-2xl font-semibold text-[var(--color-primary)]">
+          Gestão Comercial
         </h1>
         <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-          Entre com e-mail e senha para continuar.
+          Entre com e-mail e senha para acessar o sistema.
         </p>
 
         <div className="mt-6 flex flex-col gap-4">

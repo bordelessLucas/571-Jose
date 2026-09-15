@@ -52,11 +52,9 @@ export function SaleDetailPage() {
       <PageHeader
         title="Detalhes da venda"
         description="Dados comerciais e status da NF-e (Focus NFe)."
+        backTo="/vendas"
         actions={
-          <div className="flex gap-2">
-            <Link to="/vendas">
-              <Button variant="secondary">Voltar</Button>
-            </Link>
+          <div className="flex flex-wrap gap-2">
             <Link to={`/vendas/${sale.id}/editar`}>
               <Button>Editar</Button>
             </Link>

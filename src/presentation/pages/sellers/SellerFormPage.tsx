@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import type { Seller, SellerInput } from '@/domain/types'
 import { AppError } from '@/lib/errors'
 import { useSeller, useSellerMutations } from '@/hooks/useSellers'
@@ -119,11 +119,7 @@ export function SellerFormPage() {
       <PageHeader
         title={isEdit ? 'Editar vendedor' : 'Novo vendedor'}
         description="Informe os dados do vendedor."
-        actions={
-          <Link to="/vendedores">
-            <Button variant="secondary">Voltar</Button>
-          </Link>
-        }
+        backTo="/vendedores"
       />
 
       <SellerFormFields

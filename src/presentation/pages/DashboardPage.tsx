@@ -19,6 +19,9 @@ const MODULES = [
 export function DashboardPage() {
   return (
     <div>
+      <p className="mb-2 text-xs font-medium tracking-wide text-[var(--color-text-muted)] uppercase">
+        José · Gestão Comercial
+      </p>
       <PageHeader
         title="Painel inicial"
         description="Acesse os módulos do sistema de gestão comercial e financeira."
@@ -29,7 +32,7 @@ export function DashboardPage() {
           <Link
             key={module.to}
             to={module.to}
-            className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition hover:border-[var(--color-primary)]"
+            className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition hover:border-[var(--color-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
           >
             <h2 className="text-lg font-semibold text-[var(--color-text)]">{module.title}</h2>
             <p className="mt-1 text-sm text-[var(--color-text-muted)]">{module.description}</p>

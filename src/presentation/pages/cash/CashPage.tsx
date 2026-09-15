@@ -23,6 +23,7 @@ export function CashPage() {
       <PageHeader
         title="Caixa"
         description="Entradas, saídas e saldo movimentado."
+        showDashboard
         actions={
           <Link to="/caixa/nova">
             <Button>Nova movimentação</Button>
@@ -89,7 +90,7 @@ export function CashPage() {
               header: 'Ações',
               align: 'right',
               render: (row) => (
-                <div className="flex justify-end gap-2">
+                <div className="flex flex-wrap justify-end gap-2">
                   <Link to={`/caixa/${row.id}`}>
                     <Button variant="ghost">Editar</Button>
                   </Link>

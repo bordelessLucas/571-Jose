@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import type { Client, ClientInput } from '@/domain/types'
 import { AppError } from '@/lib/errors'
 import { useClient, useClientMutations } from '@/hooks/useClients'
@@ -123,11 +123,7 @@ export function ClientFormPage() {
       <PageHeader
         title={isEdit ? 'Editar cliente' : 'Novo cliente'}
         description="Informe os dados básicos e de contato."
-        actions={
-          <Link to="/clientes">
-            <Button variant="secondary">Voltar</Button>
-          </Link>
-        }
+        backTo="/clientes"
       />
 
       <ClientFormFields

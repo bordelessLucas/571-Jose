@@ -21,6 +21,7 @@ export function InventoryPage() {
       <PageHeader
         title="Estoque"
         description="Cadastro de itens e quantidade disponível."
+        showDashboard
         actions={
           <Link to="/estoque/novo">
             <Button>Novo item</Button>
@@ -50,7 +51,7 @@ export function InventoryPage() {
               header: 'Ações',
               align: 'right',
               render: (row) => (
-                <div className="flex justify-end gap-2">
+                <div className="flex flex-wrap justify-end gap-2">
                   <Link to={`/estoque/${row.id}`}>
                     <Button variant="ghost">Editar</Button>
                   </Link>

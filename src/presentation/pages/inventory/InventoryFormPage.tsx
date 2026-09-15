@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import type { InventoryItem, InventoryItemInput } from '@/domain/types'
 import { AppError } from '@/lib/errors'
 import { useInventoryItem, useInventoryMutations } from '@/hooks/useInventory'
@@ -125,11 +125,7 @@ export function InventoryFormPage() {
       <PageHeader
         title={isEdit ? 'Editar item' : 'Novo item'}
         description="Cadastre nome, quantidade e unidade."
-        actions={
-          <Link to="/estoque">
-            <Button variant="secondary">Voltar</Button>
-          </Link>
-        }
+        backTo="/estoque"
       />
       <FormFields
         key={item?.id ?? 'new-item'}

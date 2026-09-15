@@ -132,6 +132,9 @@ export function mapSaleToFocusNfePayload(
   }
 }
 
-export function buildFocusRef(saleId: string): string {
-  return `sale-${saleId}`
+export function buildFocusRef(saleId: string, reissue = false): string {
+  if (!reissue) {
+    return `sale-${saleId}`
+  }
+  return `sale-${saleId}-r${Date.now()}`
 }

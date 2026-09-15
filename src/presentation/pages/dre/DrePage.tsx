@@ -31,6 +31,7 @@ export function DrePage() {
       <PageHeader
         title="DRE simplificada"
         description="Receitas (vendas), despesas e resultado do período."
+        showDashboard
         actions={
           <Button variant="secondary" onClick={() => void refresh()}>
             Atualizar

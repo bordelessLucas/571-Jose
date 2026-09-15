@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import type {
   AccountPayable,
   AccountPayableInput,
@@ -143,11 +143,7 @@ export function AccountPayableFormPage() {
       <PageHeader
         title={isEdit ? 'Editar conta a pagar' : 'Nova conta a pagar'}
         description="Informe valor, vencimento e status."
-        actions={
-          <Link to="/financeiro/pagar">
-            <Button variant="secondary">Voltar</Button>
-          </Link>
-        }
+        backTo="/financeiro/pagar"
       />
       <FormFields
         key={account?.id ?? 'new-payable'}

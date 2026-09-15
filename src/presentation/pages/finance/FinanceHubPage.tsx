@@ -7,6 +7,7 @@ export function FinanceHubPage() {
       <PageHeader
         title="Financeiro"
         description="Contas a pagar e a receber da operação."
+        backTo="/"
       />
       <div className="grid gap-3 sm:grid-cols-2">
         <Link

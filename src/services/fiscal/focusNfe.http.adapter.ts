@@ -40,7 +40,7 @@ function mapFocusStatus(status: string | undefined): FiscalInvoiceResult['status
 export class FocusNfeHttpAdapter implements FiscalEmitterPort {
   async requestInvoice(payload: FiscalInvoiceRequest): Promise<FiscalInvoiceResult> {
     const token = getFocusNfeToken()
-    const focusRef = buildFocusRef(payload.referenceId)
+    const focusRef = buildFocusRef(payload.referenceId, Boolean(payload.reissue))
 
     if (isFocusTokenTemplate(token)) {
       return {

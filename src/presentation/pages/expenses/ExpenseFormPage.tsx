@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import type { Expense, ExpenseCategory, ExpenseInput } from '@/domain/types'
 import { EXPENSE_CATEGORY_LABELS } from '@/domain/types'
 import { AppError } from '@/lib/errors'
@@ -140,11 +140,7 @@ export function ExpenseFormPage() {
       <PageHeader
         title={isEdit ? 'Editar despesa' : 'Nova despesa'}
         description="Registre descrição, categoria, valor e data."
-        actions={
-          <Link to="/despesas">
-            <Button variant="secondary">Voltar</Button>
-          </Link>
-        }
+        backTo="/despesas"
       />
 
       <ExpenseFormFields

@@ -21,6 +21,7 @@ export function SellersPage() {
       <PageHeader
         title="Vendedores"
         description="Cadastro e consulta de vendedores associados às vendas."
+        showDashboard
         actions={
           <Link to="/vendedores/novo">
             <Button>Novo vendedor</Button>
@@ -50,7 +51,7 @@ export function SellersPage() {
               header: 'Ações',
               align: 'right',
               render: (row) => (
-                <div className="flex justify-end gap-2">
+                <div className="flex flex-wrap justify-end gap-2">
                   <Link to={`/vendedores/${row.id}`}>
                     <Button variant="ghost">Editar</Button>
                   </Link>

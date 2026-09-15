@@ -1,8 +1,11 @@
-import { useState, type ReactNode } from 'react'
-import { Navigate, Outlet } from 'react-router-dom'
+import { useEffect, useState, type ReactNode } from 'react'
+import { Link, Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '@/hooks/AuthProvider'
 import { Sidebar } from '@/presentation/components/layout/Sidebar'
+import { Button } from '@/presentation/components/ui/Button'
 import { Spinner } from '@/presentation/components/ui/Spinner'
+
+const SIDEBAR_KEY = 'jose.sidebar.collapsed'
 
 export function ProtectedRoute({ children }: { children?: ReactNode }) {
   const { user, loading } = useAuth()
@@ -25,6 +28,14 @@ export function ProtectedRoute({ children }: { children?: ReactNode }) {
 export function AppShell() {
   const { user, logout } = useAuth()
   const [loggingOut, setLoggingOut] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem(SIDEBAR_KEY) === '1'
+  })
+
+  useEffect(() => {
+    window.localStorage.setItem(SIDEBAR_KEY, collapsed ? '1' : '0')
+  }, [collapsed])
 
   if (!user) {
     return <Navigate to="/login" replace />
@@ -47,10 +58,34 @@ export function AppShell() {
           void handleLogout()
         }}
         loggingOut={loggingOut}
+        collapsed={collapsed}
+        onToggle={() => setCollapsed((value) => !value)}
       />
-      <main className="flex-1 p-5 md:p-6">
-        <Outlet />
-      </main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 md:px-6">
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              className="md:hidden"
+              onClick={() => setCollapsed((value) => !value)}
+              aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
+              aria-expanded={!collapsed}
+            >
+              Menu
+            </Button>
+            <Link to="/">
+              <Button type="button" variant="secondary">
+                Ir ao painel
+              </Button>
+            </Link>
+          </div>
+          <p className="truncate text-xs text-[var(--color-text-muted)]">{user.email}</p>
+        </div>
+        <main className="flex-1 p-5 md:p-6">
+          <Outlet />
+        </main>
+      </div>
     </div>
   )
 }

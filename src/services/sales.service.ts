@@ -14,7 +14,10 @@ import type { Client, Sale, SaleInput } from '@/domain/types'
 import { AppError, toAppError } from '@/lib/errors'
 import { getClientById } from '@/services/clients.service'
 import { prepareFiscalEmission } from '@/services/fiscal.service'
-import { createFiscalDocument } from '@/services/fiscalDocuments.service'
+import {
+  cancelActiveFiscalDocumentsForSale,
+  createFiscalDocument,
+} from '@/services/fiscalDocuments.service'
 import { db } from '@/services/firebase'
 import {
   mapDocId,
@@ -84,8 +87,23 @@ async function resolveSaleRelations(input: SaleInput): Promise<{
 /**
  * Emissão automática de NF-e ao fechar a venda (Focus NFe mock/live).
  * Falha fiscal NÃO desfaz a venda — grava status na venda e em fiscalDocuments.
+ * Em reemissão: cancela documentos ativos anteriores e usa nova ref Focus.
  */
-async function emitNfeForSale(saleId: string, input: SaleInput, client: Client) {
+async function emitNfeForSale(
+  saleId: string,
+  input: SaleInput,
+  client: Client,
+  options: { reissue?: boolean } = {},
+) {
+  const reissue = Boolean(options.reissue)
+
+  if (reissue) {
+    await cancelActiveFiscalDocumentsForSale(
+      saleId,
+      'Cancelado automaticamente por reemissão de NF-e.',
+    )
+  }
+
   const result = await prepareFiscalEmission({
     referenceType: 'sale',
     referenceId: saleId,
@@ -97,6 +115,7 @@ async function emitNfeForSale(saleId: string, input: SaleInput, client: Client) 
     recipientDocument: client.document || '00000000000',
     recipientEmail: client.email,
     recipientPhone: client.phone,
+    reissue,
   })
 
   const fiscalDocumentId = await createFiscalDocument({
@@ -206,15 +225,20 @@ export async function deleteSale(id: string): Promise<void> {
   }
 }
 
-/** Reprocessa NF-e de uma venda já existente. */
+/** Reprocessa NF-e de uma venda já existente (cancela a anterior). */
 export async function reemitNfeForSale(saleId: string): Promise<void> {
   const sale = await getSaleById(saleId)
   const client = await getClientById(sale.clientId)
-  await emitNfeForSale(saleId, {
-    clientId: sale.clientId,
-    sellerId: sale.sellerId,
-    amount: sale.amount,
-    description: sale.description,
-    soldAt: sale.soldAt,
-  }, client)
+  await emitNfeForSale(
+    saleId,
+    {
+      clientId: sale.clientId,
+      sellerId: sale.sellerId,
+      amount: sale.amount,
+      description: sale.description,
+      soldAt: sale.soldAt,
+    },
+    client,
+    { reissue: true },
+  )
 }

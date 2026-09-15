@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import type {
   CashMovement,
   CashMovementInput,
@@ -140,11 +140,7 @@ export function CashFormPage() {
       <PageHeader
         title={isEdit ? 'Editar movimentação' : 'Nova movimentação'}
         description="Registre entrada ou saída de caixa."
-        actions={
-          <Link to="/caixa">
-            <Button variant="secondary">Voltar</Button>
-          </Link>
-        }
+        backTo="/caixa"
       />
       <FormFields
         key={movement?.id ?? 'new-cash'}

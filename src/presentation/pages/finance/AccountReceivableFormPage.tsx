@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import type {
   AccountReceivable,
   AccountReceivableInput,
@@ -143,11 +143,7 @@ export function AccountReceivableFormPage() {
       <PageHeader
         title={isEdit ? 'Editar conta a receber' : 'Nova conta a receber'}
         description="Informe valor, vencimento e status."
-        actions={
-          <Link to="/financeiro/receber">
-            <Button variant="secondary">Voltar</Button>
-          </Link>
-        }
+        backTo="/financeiro/receber"
       />
       <FormFields
         key={account?.id ?? 'new-receivable'}
