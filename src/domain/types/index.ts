@@ -9,6 +9,7 @@ export type Client = {
   name: string
   email: string
   phone: string
+  address: string
   document: string
   notes: string
   createdAt: string
@@ -19,9 +20,20 @@ export type ClientInput = {
   name: string
   email: string
   phone: string
+  address: string
   document: string
   notes: string
 }
+
+export type PaymentMethod =
+  | 'dinheiro'
+  | 'pix'
+  | 'cartao_credito'
+  | 'cartao_debito'
+  | 'boleto'
+  | 'transferencia'
+  | 'cheque'
+  | ''
 
 export type Seller = {
   id: string
@@ -57,11 +69,24 @@ export type Sale = {
   id: string
   clientId: string
   clientName: string
+  clientPhone: string
+  clientAddress: string
   sellerId: string
   sellerName: string
+  productId: string
+  productName: string
+  quantity: number
+  unitPrice: number
+  deliveryFee: number
+  paymentMethod1: PaymentMethod
+  paymentFee1: number
+  paymentMethod2: PaymentMethod
+  paymentFee2: number
+  dueDate: string
   amount: number
   description: string
   soldAt: string
+  receivableId: string | null
   fiscalDocumentId: string | null
   fiscalStatus: FiscalDocumentStatus | null
   fiscalRef: string | null
@@ -72,7 +97,15 @@ export type Sale = {
 export type SaleInput = {
   clientId: string
   sellerId: string
-  amount: number
+  productId: string
+  quantity: number
+  unitPrice: number
+  deliveryFee: number
+  paymentMethod1: PaymentMethod
+  paymentFee1: number
+  paymentMethod2: PaymentMethod
+  paymentFee2: number
+  dueDate: string
   description: string
   soldAt: string
 }
@@ -126,6 +159,9 @@ export type AccountReceivable = {
   amount: number
   dueDate: string
   status: FinancialStatus
+  clientId: string
+  clientName: string
+  saleId: string | null
   createdAt: string
   updatedAt: string
 }
@@ -135,6 +171,9 @@ export type AccountReceivableInput = {
   amount: number
   dueDate: string
   status: FinancialStatus
+  clientId: string
+  clientName: string
+  saleId: string | null
 }
 
 export type CashMovementType = 'entrada' | 'saida'
@@ -262,6 +301,24 @@ export const FINANCIAL_STATUS_LABELS: Record<FinancialStatus, string> = {
   pendente: 'Pendente',
   pago: 'Pago',
   cancelado: 'Cancelado',
+}
+
+export const PAYMENT_METHOD_LABELS: Record<Exclude<PaymentMethod, ''>, string> = {
+  dinheiro: 'Dinheiro',
+  pix: 'PIX',
+  cartao_credito: 'Cartão de crédito',
+  cartao_debito: 'Cartão de débito',
+  boleto: 'Boleto',
+  transferencia: 'Transferência',
+  cheque: 'Cheque',
+}
+
+export type ClientCommercialInsight = {
+  recentSales: Sale[]
+  overdueDebt: AccountReceivable[]
+  upcomingDebt: AccountReceivable[]
+  overdueTotal: number
+  upcomingTotal: number
 }
 
 export const CASH_MOVEMENT_TYPE_LABELS: Record<CashMovementType, string> = {

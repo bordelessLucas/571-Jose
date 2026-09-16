@@ -52,6 +52,9 @@ export function AppShell() {
 
   return (
     <div className="flex min-h-svh flex-col md:flex-row">
+      <a href="#main-content" className="skip-link">
+        Ir para o conteúdo
+      </a>
       <Sidebar
         userEmail={user.email}
         onLogout={() => {
@@ -62,7 +65,7 @@ export function AppShell() {
         onToggle={() => setCollapsed((value) => !value)}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 md:px-6">
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 px-4 py-2 backdrop-blur-sm md:px-6">
           <div className="flex items-center gap-2">
             <Button
               type="button"
@@ -74,15 +77,20 @@ export function AppShell() {
             >
               Menu
             </Button>
-            <Link to="/">
+            <Link
+              to="/"
+              className="rounded-[var(--radius-md)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"
+            >
               <Button type="button" variant="secondary">
                 Ir ao painel
               </Button>
             </Link>
           </div>
-          <p className="truncate text-xs text-[var(--color-text-muted)]">{user.email}</p>
+          <p className="truncate text-xs text-[var(--color-text-muted)]" translate="no">
+            {user.email}
+          </p>
         </div>
-        <main className="flex-1 p-5 md:p-6">
+        <main id="main-content" tabIndex={-1} className="flex-1 scroll-mt-4 p-5 md:p-6">
           <Outlet />
         </main>
       </div>

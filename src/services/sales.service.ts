@@ -9,9 +9,23 @@ import {
   query,
   serverTimestamp,
   updateDoc,
+  where,
 } from 'firebase/firestore'
-import type { Client, Sale, SaleInput } from '@/domain/types'
+import type {
+  Client,
+  ClientCommercialInsight,
+  PaymentMethod,
+  Sale,
+  SaleInput,
+} from '@/domain/types'
 import { AppError, toAppError } from '@/lib/errors'
+import { addDaysInputValue, computeSaleAmount, todayInputValue } from '@/lib/format'
+import {
+  createAccountReceivable,
+  findAccountReceivableBySaleId,
+  listAccountsReceivableByClientId,
+  updateAccountReceivable,
+} from '@/services/accountsReceivable.service'
 import { getClientById } from '@/services/clients.service'
 import { prepareFiscalEmission } from '@/services/fiscal.service'
 import {
@@ -25,9 +39,28 @@ import {
   requireString,
   toIsoString,
 } from '@/services/firestore.mapper'
+import {
+  adjustInventoryQuantity,
+  getInventoryItemById,
+} from '@/services/inventory.service'
 import { getSellerById } from '@/services/sellers.service'
 
 const COLLECTION = 'sales'
+
+const VALID_PAYMENT: PaymentMethod[] = [
+  'dinheiro',
+  'pix',
+  'cartao_credito',
+  'cartao_debito',
+  'boleto',
+  'transferencia',
+  'cheque',
+  '',
+]
+
+function isPaymentMethod(value: string): value is PaymentMethod {
+  return VALID_PAYMENT.includes(value as PaymentMethod)
+}
 
 function validateInput(input: SaleInput): void {
   if (!input.clientId) {
@@ -36,25 +69,68 @@ function validateInput(input: SaleInput): void {
   if (!input.sellerId) {
     throw new AppError('validation', 'Selecione um vendedor.')
   }
-  if (!(input.amount > 0)) {
-    throw new AppError('validation', 'Informe um valor maior que zero.')
+  if (!input.productId) {
+    throw new AppError('validation', 'Selecione um produto.')
+  }
+  if (!(input.quantity > 0)) {
+    throw new AppError('validation', 'Informe uma quantidade maior que zero.')
+  }
+  if (!(input.unitPrice > 0)) {
+    throw new AppError('validation', 'Informe um valor unitário maior que zero.')
+  }
+  if (input.deliveryFee < 0 || input.paymentFee1 < 0 || input.paymentFee2 < 0) {
+    throw new AppError('validation', 'Taxas não podem ser negativas.')
+  }
+  if (!input.paymentMethod1 || !isPaymentMethod(input.paymentMethod1)) {
+    throw new AppError('validation', 'Selecione a primeira forma de pagamento.')
+  }
+  if (input.paymentMethod2 && !isPaymentMethod(input.paymentMethod2)) {
+    throw new AppError('validation', 'Segunda forma de pagamento inválida.')
   }
   if (!input.soldAt) {
     throw new AppError('validation', 'Informe a data da venda.')
+  }
+  if (!input.dueDate) {
+    throw new AppError('validation', 'Informe a data de vencimento.')
+  }
+  if (!(computeSaleAmount(input) > 0)) {
+    throw new AppError('validation', 'O total da venda deve ser maior que zero.')
   }
 }
 
 function mapSale(id: string, data: Record<string, unknown>): Sale {
   const fiscalStatusRaw = requireString(data, 'fiscalStatus')
+  const paymentMethod1Raw = requireString(data, 'paymentMethod1')
+  const paymentMethod2Raw = requireString(data, 'paymentMethod2')
+
   return {
     id,
     clientId: requireString(data, 'clientId'),
     clientName: requireString(data, 'clientName'),
+    clientPhone: requireString(data, 'clientPhone'),
+    clientAddress: requireString(data, 'clientAddress'),
     sellerId: requireString(data, 'sellerId'),
     sellerName: requireString(data, 'sellerName'),
+    productId: requireString(data, 'productId'),
+    productName: requireString(data, 'productName'),
+    quantity: requireNumber(data, 'quantity') || 1,
+    unitPrice: requireNumber(data, 'unitPrice') || requireNumber(data, 'amount'),
+    deliveryFee: requireNumber(data, 'deliveryFee'),
+    paymentMethod1: isPaymentMethod(paymentMethod1Raw)
+      ? paymentMethod1Raw
+      : '',
+    paymentFee1: requireNumber(data, 'paymentFee1'),
+    paymentMethod2: isPaymentMethod(paymentMethod2Raw)
+      ? paymentMethod2Raw
+      : '',
+    paymentFee2: requireNumber(data, 'paymentFee2'),
+    dueDate:
+      requireString(data, 'dueDate') ||
+      addDaysInputValue(requireString(data, 'soldAt') || todayInputValue(), 30),
     amount: requireNumber(data, 'amount'),
     description: requireString(data, 'description'),
     soldAt: requireString(data, 'soldAt'),
+    receivableId: requireString(data, 'receivableId') || null,
     fiscalDocumentId: requireString(data, 'fiscalDocumentId') || null,
     fiscalStatus: fiscalStatusRaw
       ? (fiscalStatusRaw as Sale['fiscalStatus'])
@@ -65,13 +141,24 @@ function mapSale(id: string, data: Record<string, unknown>): Sale {
   }
 }
 
+function buildDescription(input: SaleInput, productName: string): string {
+  const trimmed = input.description.trim()
+  if (trimmed) return trimmed
+  return `${productName} × ${input.quantity}`
+}
+
 async function resolveSaleRelations(input: SaleInput): Promise<{
   client: Client
   sellerName: string
+  productName: string
+  productUnit: string
+  stockQuantity: number
+  amount: number
 }> {
-  const [client, seller] = await Promise.all([
+  const [client, seller, product] = await Promise.all([
     getClientById(input.clientId),
     getSellerById(input.sellerId),
+    getInventoryItemById(input.productId),
   ])
 
   if (!seller.active) {
@@ -81,7 +168,81 @@ async function resolveSaleRelations(input: SaleInput): Promise<{
   return {
     client,
     sellerName: seller.name,
+    productName: product.name,
+    productUnit: product.unit,
+    stockQuantity: product.quantity,
+    amount: computeSaleAmount(input),
   }
+}
+
+async function syncStockOnCreate(productId: string, quantity: number): Promise<void> {
+  await adjustInventoryQuantity(productId, -quantity)
+}
+
+async function syncStockOnUpdate(
+  previous: Sale,
+  nextProductId: string,
+  nextQuantity: number,
+): Promise<void> {
+  if (previous.productId && previous.productId === nextProductId) {
+    const delta = previous.quantity - nextQuantity
+    if (delta !== 0) {
+      await adjustInventoryQuantity(nextProductId, delta)
+    }
+    return
+  }
+
+  if (previous.productId && previous.quantity > 0) {
+    await adjustInventoryQuantity(previous.productId, previous.quantity)
+  }
+  await adjustInventoryQuantity(nextProductId, -nextQuantity)
+}
+
+async function syncStockOnDelete(sale: Sale): Promise<void> {
+  if (sale.productId && sale.quantity > 0) {
+    await adjustInventoryQuantity(sale.productId, sale.quantity)
+  }
+}
+
+async function upsertReceivableForSale(
+  saleId: string,
+  input: SaleInput,
+  client: Client,
+  amount: number,
+  productName: string,
+  existingReceivableId: string | null,
+): Promise<string> {
+  const payload = {
+    description: `Venda — ${client.name} — ${productName}`,
+    amount,
+    dueDate: input.dueDate,
+    status: 'pendente' as const,
+    clientId: client.id,
+    clientName: client.name,
+    saleId,
+  }
+
+  if (existingReceivableId) {
+    const existing = await findAccountReceivableBySaleId(saleId)
+    if (existing) {
+      await updateAccountReceivable(existing.id, {
+        ...payload,
+        status: existing.status === 'pago' ? 'pago' : payload.status,
+      })
+      return existing.id
+    }
+  }
+
+  const linked = await findAccountReceivableBySaleId(saleId)
+  if (linked) {
+    await updateAccountReceivable(linked.id, {
+      ...payload,
+      status: linked.status === 'pago' ? 'pago' : payload.status,
+    })
+    return linked.id
+  }
+
+  return createAccountReceivable(payload)
 }
 
 /**
@@ -91,7 +252,9 @@ async function resolveSaleRelations(input: SaleInput): Promise<{
  */
 async function emitNfeForSale(
   saleId: string,
-  input: SaleInput,
+  amount: number,
+  description: string,
+  soldAt: string,
   client: Client,
   options: { reissue?: boolean } = {},
 ) {
@@ -108,9 +271,9 @@ async function emitNfeForSale(
     referenceType: 'sale',
     referenceId: saleId,
     documentType: 'nfe',
-    amount: input.amount,
-    description: input.description.trim() || `Venda ${saleId}`,
-    soldAt: input.soldAt,
+    amount,
+    description,
+    soldAt,
     recipientName: client.name,
     recipientDocument: client.document || '00000000000',
     recipientEmail: client.email,
@@ -121,8 +284,8 @@ async function emitNfeForSale(
   const fiscalDocumentId = await createFiscalDocument({
     result,
     referenceId: saleId,
-    amount: input.amount,
-    description: input.description.trim() || `Venda ${saleId}`,
+    amount,
+    description,
     recipientName: client.name,
     recipientDocument: client.document || '00000000000',
   })
@@ -137,6 +300,34 @@ async function emitNfeForSale(
   return result
 }
 
+function toSalePayload(
+  input: SaleInput,
+  relations: Awaited<ReturnType<typeof resolveSaleRelations>>,
+) {
+  const description = buildDescription(input, relations.productName)
+  return {
+    clientId: input.clientId,
+    clientName: relations.client.name,
+    clientPhone: relations.client.phone,
+    clientAddress: relations.client.address,
+    sellerId: input.sellerId,
+    sellerName: relations.sellerName,
+    productId: input.productId,
+    productName: relations.productName,
+    quantity: input.quantity,
+    unitPrice: input.unitPrice,
+    deliveryFee: input.deliveryFee,
+    paymentMethod1: input.paymentMethod1,
+    paymentFee1: input.paymentFee1,
+    paymentMethod2: input.paymentMethod2 || '',
+    paymentFee2: input.paymentMethod2 ? input.paymentFee2 : 0,
+    dueDate: input.dueDate,
+    amount: relations.amount,
+    description,
+    soldAt: input.soldAt,
+  }
+}
+
 export async function listSales(): Promise<Sale[]> {
   try {
     const snapshot = await getDocs(
@@ -145,6 +336,52 @@ export async function listSales(): Promise<Sale[]> {
     return snapshot.docs.map((item) => mapSale(mapDocId(item), item.data()))
   } catch (error) {
     throw toAppError(error, 'Não foi possível carregar as vendas.')
+  }
+}
+
+export async function listSalesByClientId(clientId: string): Promise<Sale[]> {
+  if (!clientId) return []
+
+  try {
+    const snapshot = await getDocs(
+      query(
+        collection(db, COLLECTION),
+        where('clientId', '==', clientId),
+        orderBy('soldAt', 'desc'),
+      ),
+    )
+    return snapshot.docs.map((item) => mapSale(mapDocId(item), item.data()))
+  } catch (error) {
+    try {
+      const all = await listSales()
+      return all
+        .filter((sale) => sale.clientId === clientId)
+        .sort((a, b) => b.soldAt.localeCompare(a.soldAt))
+    } catch {
+      throw toAppError(error, 'Não foi possível carregar as compras do cliente.')
+    }
+  }
+}
+
+export async function getClientCommercialInsight(
+  clientId: string,
+): Promise<ClientCommercialInsight> {
+  const today = todayInputValue()
+  const [sales, receivables] = await Promise.all([
+    listSalesByClientId(clientId),
+    listAccountsReceivableByClientId(clientId),
+  ])
+
+  const pending = receivables.filter((item) => item.status === 'pendente')
+  const overdueDebt = pending.filter((item) => item.dueDate < today)
+  const upcomingDebt = pending.filter((item) => item.dueDate >= today)
+
+  return {
+    recentSales: sales.slice(0, 5),
+    overdueDebt,
+    upcomingDebt,
+    overdueTotal: overdueDebt.reduce((sum, item) => sum + item.amount, 0),
+    upcomingTotal: upcomingDebt.reduce((sum, item) => sum + item.amount, 0),
   }
 }
 
@@ -165,14 +402,19 @@ export async function createSale(input: SaleInput): Promise<string> {
 
   try {
     const relations = await resolveSaleRelations(input)
+    if (input.quantity > relations.stockQuantity) {
+      throw new AppError(
+        'validation',
+        `Estoque insuficiente. Disponível: ${relations.stockQuantity} ${relations.productUnit}.`,
+      )
+    }
+
+    const payload = toSalePayload(input, relations)
+    await syncStockOnCreate(input.productId, input.quantity)
+
     const ref = await addDoc(collection(db, COLLECTION), {
-      clientId: input.clientId,
-      clientName: relations.client.name,
-      sellerId: input.sellerId,
-      sellerName: relations.sellerName,
-      amount: input.amount,
-      description: input.description.trim(),
-      soldAt: input.soldAt,
+      ...payload,
+      receivableId: null,
       fiscalDocumentId: null,
       fiscalStatus: null,
       fiscalRef: null,
@@ -181,7 +423,30 @@ export async function createSale(input: SaleInput): Promise<string> {
     })
 
     try {
-      await emitNfeForSale(ref.id, input, relations.client)
+      const receivableId = await upsertReceivableForSale(
+        ref.id,
+        input,
+        relations.client,
+        relations.amount,
+        relations.productName,
+        null,
+      )
+      await updateDoc(doc(db, COLLECTION, ref.id), {
+        receivableId,
+        updatedAt: serverTimestamp(),
+      })
+    } catch (receivableError) {
+      console.error('Falha ao gerar conta a receber da venda:', receivableError)
+    }
+
+    try {
+      await emitNfeForSale(
+        ref.id,
+        relations.amount,
+        payload.description,
+        input.soldAt,
+        relations.client,
+      )
     } catch (fiscalError) {
       await updateDoc(doc(db, COLLECTION, ref.id), {
         fiscalStatus: 'error',
@@ -201,15 +466,39 @@ export async function updateSale(id: string, input: SaleInput): Promise<void> {
   validateInput(input)
 
   try {
+    const previous = await getSaleById(id)
     const relations = await resolveSaleRelations(input)
+
+    const available =
+      relations.stockQuantity +
+      (previous.productId === input.productId ? previous.quantity : 0)
+    if (input.quantity > available) {
+      throw new AppError(
+        'validation',
+        `Estoque insuficiente. Disponível: ${available} ${relations.productUnit}.`,
+      )
+    }
+
+    await syncStockOnUpdate(previous, input.productId, input.quantity)
+    const payload = toSalePayload(input, relations)
+
+    let receivableId = previous.receivableId
+    try {
+      receivableId = await upsertReceivableForSale(
+        id,
+        input,
+        relations.client,
+        relations.amount,
+        relations.productName,
+        previous.receivableId,
+      )
+    } catch (receivableError) {
+      console.error('Falha ao sincronizar conta a receber:', receivableError)
+    }
+
     await updateDoc(doc(db, COLLECTION, id), {
-      clientId: input.clientId,
-      clientName: relations.client.name,
-      sellerId: input.sellerId,
-      sellerName: relations.sellerName,
-      amount: input.amount,
-      description: input.description.trim(),
-      soldAt: input.soldAt,
+      ...payload,
+      receivableId,
       updatedAt: serverTimestamp(),
     })
   } catch (error) {
@@ -219,6 +508,22 @@ export async function updateSale(id: string, input: SaleInput): Promise<void> {
 
 export async function deleteSale(id: string): Promise<void> {
   try {
+    const sale = await getSaleById(id)
+    await syncStockOnDelete(sale)
+
+    const linked = await findAccountReceivableBySaleId(id)
+    if (linked && linked.status === 'pendente') {
+      await updateAccountReceivable(linked.id, {
+        description: linked.description,
+        amount: linked.amount,
+        dueDate: linked.dueDate,
+        status: 'cancelado',
+        clientId: linked.clientId,
+        clientName: linked.clientName,
+        saleId: linked.saleId,
+      })
+    }
+
     await deleteDoc(doc(db, COLLECTION, id))
   } catch (error) {
     throw toAppError(error, 'Não foi possível excluir a venda.')
@@ -231,13 +536,9 @@ export async function reemitNfeForSale(saleId: string): Promise<void> {
   const client = await getClientById(sale.clientId)
   await emitNfeForSale(
     saleId,
-    {
-      clientId: sale.clientId,
-      sellerId: sale.sellerId,
-      amount: sale.amount,
-      description: sale.description,
-      soldAt: sale.soldAt,
-    },
+    sale.amount,
+    sale.description,
+    sale.soldAt,
     client,
     { reissue: true },
   )

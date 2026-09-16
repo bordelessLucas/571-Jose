@@ -115,3 +115,30 @@ export async function deleteInventoryItem(id: string): Promise<void> {
     throw toAppError(error, 'Não foi possível excluir o item.')
   }
 }
+
+/** Ajusta estoque por delta (negativo = saída). Impede saldo negativo. */
+export async function adjustInventoryQuantity(
+  id: string,
+  delta: number,
+): Promise<void> {
+  if (!Number.isFinite(delta) || delta === 0) {
+    return
+  }
+
+  try {
+    const item = await getInventoryItemById(id)
+    const next = item.quantity + delta
+    if (next < 0) {
+      throw new AppError(
+        'validation',
+        `Estoque insuficiente para "${item.name}". Disponível: ${item.quantity} ${item.unit}.`,
+      )
+    }
+    await updateDoc(doc(db, COLLECTION, id), {
+      quantity: next,
+      updatedAt: serverTimestamp(),
+    })
+  } catch (error) {
+    throw toAppError(error, 'Não foi possível atualizar o estoque.')
+  }
+}

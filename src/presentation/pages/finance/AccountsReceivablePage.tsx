@@ -7,10 +7,15 @@ import { isOverdue } from '@/lib/finance'
 import { useAccountsReceivable } from '@/hooks/useAccountsReceivable'
 import { Alert } from '@/presentation/components/ui/Alert'
 import { Button } from '@/presentation/components/ui/Button'
+import { ConfirmDialog } from '@/presentation/components/ui/ConfirmDialog'
 import { DataTable } from '@/presentation/components/ui/DataTable'
 import { PageHeader } from '@/presentation/components/ui/PageHeader'
 import { Select } from '@/presentation/components/ui/Select'
 import { Spinner } from '@/presentation/components/ui/Spinner'
+import {
+  StatusBadge,
+  financialStatusTone,
+} from '@/presentation/components/ui/StatusBadge'
 
 const STATUS_FILTER_OPTIONS = [
   { value: 'all', label: 'Todos' },
@@ -22,19 +27,27 @@ const STATUS_FILTER_OPTIONS = [
 export function AccountsReceivablePage() {
   const [statusFilter, setStatusFilter] = useState<FinancialStatus | 'all'>('all')
   const { accounts, loading, error, remove } = useAccountsReceivable(statusFilter)
+  const [pendingDelete, setPendingDelete] = useState<AccountReceivable | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
   const rows = useMemo(() => accounts, [accounts])
 
-  async function handleDelete(account: AccountReceivable) {
-    const confirmed = window.confirm('Excluir esta conta a receber?')
-    if (!confirmed) return
-    await remove(account.id)
+  async function confirmDelete() {
+    if (!pendingDelete) return
+    setDeleting(true)
+    try {
+      await remove(pendingDelete.id)
+      setPendingDelete(null)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   return (
     <div>
       <PageHeader
         title="Contas a receber"
-        description="Lançamentos com valor, vencimento e status."
+        description="Débitos de clientes, inclusive gerados automaticamente pelas vendas."
         backTo="/financeiro"
         actions={
           <Link to="/financeiro/receber/novo">
@@ -62,17 +75,35 @@ export function AccountsReceivablePage() {
         <DataTable
           rows={rows}
           rowKey={(row) => row.id}
-          emptyMessage="Nenhuma conta a receber cadastrada."
+          emptyTitle="Nenhuma conta a receber"
+          emptyDescription="Cadastre recebíveis ou feche vendas para gerar débitos automaticamente."
+          emptyAction={
+            <Link to="/financeiro/receber/novo">
+              <Button>Nova conta</Button>
+            </Link>
+          }
           columns={[
             {
               key: 'dueDate',
               header: 'Vencimento',
-              render: (row) => formatDate(row.dueDate),
+              render: (row) => {
+                const overdue = isOverdue(row.dueDate, row.status)
+                return (
+                  <span className={overdue ? 'font-medium text-[var(--color-danger)]' : ''}>
+                    {formatDate(row.dueDate)}
+                  </span>
+                )
+              },
             },
             {
               key: 'description',
               header: 'Descrição',
               render: (row) => row.description,
+            },
+            {
+              key: 'client',
+              header: 'Cliente',
+              render: (row) => row.clientName || '—',
             },
             {
               key: 'amount',
@@ -83,10 +114,19 @@ export function AccountsReceivablePage() {
             {
               key: 'status',
               header: 'Status',
-              render: (row) =>
-                isOverdue(row.dueDate, row.status)
-                  ? 'Pendente (vencida)'
-                  : FINANCIAL_STATUS_LABELS[row.status],
+              render: (row) => {
+                const overdue = isOverdue(row.dueDate, row.status)
+                return (
+                  <StatusBadge
+                    label={
+                      overdue
+                        ? 'Pendente (vencida)'
+                        : FINANCIAL_STATUS_LABELS[row.status]
+                    }
+                    tone={financialStatusTone(row.status, overdue)}
+                  />
+                )
+              },
             },
             {
               key: 'actions',
@@ -97,12 +137,7 @@ export function AccountsReceivablePage() {
                   <Link to={`/financeiro/receber/${row.id}`}>
                     <Button variant="ghost">Editar</Button>
                   </Link>
-                  <Button
-                    variant="danger"
-                    onClick={() => {
-                      void handleDelete(row)
-                    }}
-                  >
+                  <Button variant="danger" onClick={() => setPendingDelete(row)}>
                     Excluir
                   </Button>
                 </div>
@@ -111,6 +146,24 @@ export function AccountsReceivablePage() {
           ]}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title="Excluir conta a receber?"
+        description={
+          pendingDelete
+            ? `A conta "${pendingDelete.description}" será removida.`
+            : ''
+        }
+        confirmLabel="Excluir"
+        busy={deleting}
+        onCancel={() => {
+          if (!deleting) setPendingDelete(null)
+        }}
+        onConfirm={() => {
+          void confirmDelete()
+        }}
+      />
     </div>
   )
 }

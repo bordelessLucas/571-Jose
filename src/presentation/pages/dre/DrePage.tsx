@@ -73,7 +73,7 @@ export function DrePage() {
             <p className="text-[13px] text-[var(--color-text-muted)]">
               Receitas ({summary.salesCount} vendas)
             </p>
-            <p className="mt-1 font-mono text-xl text-[var(--color-success)]">
+            <p className="mt-1 font-mono text-xl tabular-nums text-[var(--color-success)]">
               {formatCurrency(summary.receitas)}
             </p>
           </div>
@@ -81,13 +81,13 @@ export function DrePage() {
             <p className="text-[13px] text-[var(--color-text-muted)]">
               Despesas ({summary.expensesCount} lançamentos)
             </p>
-            <p className="mt-1 font-mono text-xl text-[var(--color-danger)]">
+            <p className="mt-1 font-mono text-xl tabular-nums text-[var(--color-danger)]">
               {formatCurrency(summary.despesas)}
             </p>
           </div>
           <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
             <p className="text-[13px] text-[var(--color-text-muted)]">Resultado</p>
-            <p className="mt-1 font-mono text-xl font-semibold text-[var(--color-primary)]">
+            <p className="mt-1 font-mono text-xl font-semibold tabular-nums text-[var(--color-primary)]">
               {formatCurrency(summary.resultado)}
             </p>
           </div>

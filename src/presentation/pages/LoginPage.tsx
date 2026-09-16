@@ -15,7 +15,7 @@ export function LoginPage() {
   if (loading) {
     return (
       <div className="flex min-h-svh items-center justify-center">
-        <Spinner />
+        <Spinner label="Verificando sessão…" />
       </div>
     )
   }
@@ -49,10 +49,10 @@ export function LoginPage() {
         }}
         className="w-full max-w-md rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm"
       >
-        <p className="text-xs font-medium tracking-wide text-[var(--color-text-muted)] uppercase">
+        <p className="text-xs font-medium tracking-wide text-[var(--color-text-muted)]">
           José
         </p>
-        <h1 className="mt-1 text-2xl font-semibold text-[var(--color-primary)]">
+        <h1 className="mt-1 text-2xl font-semibold text-[var(--color-primary)] text-balance">
           Gestão Comercial
         </h1>
         <p className="mt-2 text-sm text-[var(--color-text-muted)]">
@@ -65,6 +65,8 @@ export function LoginPage() {
             name="email"
             type="email"
             autoComplete="username"
+            spellCheck={false}
+            inputMode="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             required
@@ -79,7 +81,7 @@ export function LoginPage() {
             required
           />
           {error ? <Alert tone="danger">{error}</Alert> : null}
-          <Button type="submit" disabled={submitting}>
+          <Button type="submit" disabled={submitting} aria-busy={submitting}>
             {submitting ? 'Entrando…' : 'Entrar'}
           </Button>
         </div>

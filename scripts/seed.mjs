@@ -76,6 +76,7 @@ const CATEGORIES = [
 ]
 const STATUSES = ['pendente', 'pago', 'cancelado']
 const UNITS = ['un', 'cx', 'kg', 'lt']
+const PAYMENTS = ['dinheiro', 'pix', 'cartao_credito', 'cartao_debito', 'boleto', 'transferencia']
 
 function pad(n, size = 3) {
   return String(n).padStart(size, '0')
@@ -92,6 +93,12 @@ function randomAmount(min, max) {
 function daysAgo(days) {
   const d = new Date()
   d.setDate(d.getDate() - days)
+  return d.toISOString().slice(0, 10)
+}
+
+function addDays(base, days) {
+  const d = new Date(`${base}T12:00:00`)
+  d.setDate(d.getDate() + days)
   return d.toISOString().slice(0, 10)
 }
 
@@ -173,6 +180,8 @@ async function main() {
   const clientIds = []
   const sellerIds = []
   const saleIds = []
+  const inventoryIds = []
+  const inventoryNames = []
 
   console.log('Seeding clients...')
   await commitInChunks(
@@ -184,6 +193,7 @@ async function main() {
         name: `SEED Cliente ${pad(i + 1)}`,
         email: `cliente${pad(i + 1)}@seed.jose.com`,
         phone: `1199${pad(i, 7)}`,
+        address: `Rua Seed ${pad(i + 1)}, ${100 + i} — Centro`,
         document: cpfFake(i + 1),
         notes: i % 5 === 0 ? 'Cliente prioritário seed' : '',
         createdAt: now,
@@ -216,30 +226,89 @@ async function main() {
     .map((id, i) => ({ id, name: sellerNames[i], active: i % 17 !== 0 }))
     .filter((s) => s.active)
 
+  console.log('Seeding inventory...')
+  await commitInChunks(
+    db,
+    Array.from({ length: COUNTS.inventory }, (_, i) => (batch) => {
+      const ref = doc(collection(db, 'inventoryItems'))
+      inventoryIds.push(ref.id)
+      const name = `SEED Item ${pad(i + 1)}`
+      inventoryNames.push(name)
+      batch.set(ref, {
+        name,
+        sku: `SKU-SEED-${pad(i + 1)}`,
+        quantity: randomInt(50, 500),
+        unit: UNITS[i % UNITS.length],
+        notes: i % 4 === 0 ? 'Estoque crítico monitorado' : '',
+        createdAt: now,
+        updatedAt: now,
+      })
+    }),
+  )
+
   console.log('Seeding sales + fiscalDocuments (NF-e mock)...')
   const saleBuilders = []
   const fiscalBuilders = []
+  const saleMeta = []
   for (let i = 0; i < COUNTS.sales; i += 1) {
     const saleRef = doc(collection(db, 'sales'))
     const fiscalRef = doc(collection(db, 'fiscalDocuments'))
     saleIds.push(saleRef.id)
-    const clientId = clientIds[i % clientIds.length]
+    const clientIndex = i % clientIds.length
+    const clientId = clientIds[clientIndex]
     const seller = activeSellers[i % activeSellers.length]
-    const sellerId = seller.id
-    const amount = randomAmount(80, 8500)
+    const productIndex = i % inventoryIds.length
+    const productId = inventoryIds[productIndex]
+    const productName = inventoryNames[productIndex]
+    const quantity = randomInt(1, 5)
+    const unitPrice = randomAmount(20, 400)
+    const deliveryFee = i % 3 === 0 ? randomAmount(5, 45) : 0
+    const paymentMethod1 = PAYMENTS[i % PAYMENTS.length]
+    const paymentFee1 = i % 4 === 0 ? randomAmount(1, 15) : 0
+    const paymentMethod2 = i % 5 === 0 ? PAYMENTS[(i + 2) % PAYMENTS.length] : ''
+    const paymentFee2 = paymentMethod2 && i % 7 === 0 ? randomAmount(1, 10) : 0
+    const amount = Number(
+      (quantity * unitPrice + deliveryFee + paymentFee1 + paymentFee2).toFixed(2),
+    )
     const soldAt = daysAgo(randomInt(0, 180))
+    const dueDate = addDays(soldAt, 30)
     const focusRef = `sale-${saleRef.id}`
     const protocol = `MOCK-SEED-${pad(i + 1, 4)}`
+    const clientName = `SEED Cliente ${pad(clientIndex + 1)}`
+    const clientPhone = `1199${pad(clientIndex, 7)}`
+    const clientAddress = `Rua Seed ${pad(clientIndex + 1)}, ${100 + clientIndex} — Centro`
+
+    saleMeta.push({
+      saleId: saleRef.id,
+      clientId,
+      clientName,
+      amount,
+      dueDate,
+      productName,
+    })
 
     saleBuilders.push((batch) => {
       batch.set(saleRef, {
         clientId,
-        clientName: `SEED Cliente ${pad((i % clientIds.length) + 1)}`,
-        sellerId,
+        clientName,
+        clientPhone,
+        clientAddress,
+        sellerId: seller.id,
         sellerName: seller.name,
+        productId,
+        productName,
+        quantity,
+        unitPrice,
+        deliveryFee,
+        paymentMethod1,
+        paymentFee1,
+        paymentMethod2,
+        paymentFee2,
+        dueDate,
         amount,
-        description: `Pedido seed #${pad(i + 1, 4)} — lote validação`,
+        description: `Pedido seed #${pad(i + 1, 4)} — ${productName}`,
         soldAt,
+        receivableId: null,
         fiscalDocumentId: fiscalRef.id,
         fiscalStatus: 'authorized',
         fiscalRef: focusRef,
@@ -257,9 +326,9 @@ async function main() {
         status: 'authorized',
         providerMode: 'mock',
         amount,
-        description: `Pedido seed #${pad(i + 1, 4)} — lote validação`,
-        recipientName: `SEED Cliente ${pad((i % clientIds.length) + 1)}`,
-        recipientDocument: cpfFake((i % clientIds.length) + 1),
+        description: `Pedido seed #${pad(i + 1, 4)} — ${productName}`,
+        recipientName: clientName,
+        recipientDocument: cpfFake(clientIndex + 1),
         externalId: `NFe${protocol}`,
         protocol,
         message: 'Mock Focus NFe: NF-e autorizada (seed).',
@@ -304,21 +373,47 @@ async function main() {
     }),
   )
 
-  console.log('Seeding accounts receivable...')
-  await commitInChunks(
-    db,
-    Array.from({ length: COUNTS.receivable }, (_, i) => (batch) => {
-      const ref = doc(collection(db, 'accountsReceivable'))
+  console.log('Seeding accounts receivable (ligadas a vendas + extras)...')
+  const receivableBuilders = []
+  for (let i = 0; i < Math.min(COUNTS.receivable, saleMeta.length); i += 1) {
+    const meta = saleMeta[i]
+    const ref = doc(collection(db, 'accountsReceivable'))
+    receivableBuilders.push((batch) => {
       batch.set(ref, {
-        description: `SEED Conta a receber ${pad(i + 1)}`,
-        amount: randomAmount(50, 7000),
-        dueDate: daysAgo(randomInt(-40, 60)),
+        description: `Venda — ${meta.clientName} — ${meta.productName}`,
+        amount: meta.amount,
+        dueDate: meta.dueDate,
         status: STATUSES[i % STATUSES.length],
+        clientId: meta.clientId,
+        clientName: meta.clientName,
+        saleId: meta.saleId,
         createdAt: now,
         updatedAt: now,
       })
-    }),
-  )
+      batch.update(doc(db, 'sales', meta.saleId), {
+        receivableId: ref.id,
+        updatedAt: now,
+      })
+    })
+  }
+  for (let i = saleMeta.length; i < COUNTS.receivable; i += 1) {
+    const clientIndex = i % clientIds.length
+    const ref = doc(collection(db, 'accountsReceivable'))
+    receivableBuilders.push((batch) => {
+      batch.set(ref, {
+        description: `SEED Conta a receber avulsa ${pad(i + 1)}`,
+        amount: randomAmount(50, 7000),
+        dueDate: daysAgo(randomInt(-40, 60)),
+        status: STATUSES[i % STATUSES.length],
+        clientId: clientIds[clientIndex],
+        clientName: `SEED Cliente ${pad(clientIndex + 1)}`,
+        saleId: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+    })
+  }
+  await commitInChunks(db, receivableBuilders)
 
   console.log('Seeding cash movements...')
   await commitInChunks(
@@ -337,23 +432,6 @@ async function main() {
     }),
   )
 
-  console.log('Seeding inventory...')
-  await commitInChunks(
-    db,
-    Array.from({ length: COUNTS.inventory }, (_, i) => (batch) => {
-      const ref = doc(collection(db, 'inventoryItems'))
-      batch.set(ref, {
-        name: `SEED Item ${pad(i + 1)}`,
-        sku: `SKU-SEED-${pad(i + 1)}`,
-        quantity: randomInt(0, 500),
-        unit: UNITS[i % UNITS.length],
-        notes: i % 4 === 0 ? 'Estoque crítico monitorado' : '',
-        createdAt: now,
-        updatedAt: now,
-      })
-    }),
-  )
-
   console.log('\nSeed concluído.')
   console.log(
     JSON.stringify(
@@ -366,7 +444,7 @@ async function main() {
         payable: COUNTS.payable,
         receivable: COUNTS.receivable,
         cash: COUNTS.cash,
-        inventory: COUNTS.inventory,
+        inventory: inventoryIds.length,
       },
       null,
       2,

@@ -10,6 +10,7 @@ type PageHeaderProps = {
   backTo?: string
   /** Exibe botão para o painel. Default: true quando backTo existe. */
   showDashboard?: boolean
+  meta?: ReactNode
 }
 
 export function PageHeader({
@@ -18,13 +19,14 @@ export function PageHeader({
   actions,
   backTo,
   showDashboard,
+  meta,
 }: PageHeaderProps) {
   const fallback = backTo ?? '/'
   const { goBack, goDashboard } = useSmartBack(fallback)
   const shouldShowDashboard = showDashboard ?? Boolean(backTo)
 
   return (
-    <header className="mb-6 flex flex-col gap-3">
+    <header className="mb-5 flex flex-col gap-3">
       {(backTo || shouldShowDashboard) && (
         <div className="flex flex-wrap items-center gap-2">
           {backTo ? (
@@ -41,11 +43,16 @@ export function PageHeader({
       )}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-[var(--color-text)]">{title}</h1>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold text-[var(--color-text)] text-balance">
+            {title}
+          </h1>
           {description ? (
-            <p className="mt-1 text-sm text-[var(--color-text-muted)]">{description}</p>
+            <p className="mt-1 max-w-2xl text-sm text-[var(--color-text-muted)]">
+              {description}
+            </p>
           ) : null}
+          {meta ? <div className="mt-2">{meta}</div> : null}
         </div>
         {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
       </div>

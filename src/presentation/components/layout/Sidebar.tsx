@@ -52,7 +52,7 @@ export function Sidebar({
           </div>
         ) : (
           <div className="min-w-0">
-            <p className="text-xs font-medium tracking-wide text-[var(--color-text-muted)] uppercase">
+            <p className="text-xs font-medium tracking-wide text-[var(--color-text-muted)]">
               José
             </p>
             <p className="mt-1 text-lg font-semibold text-[var(--color-primary)]">
@@ -89,7 +89,7 @@ export function Sidebar({
             title={item.label}
             aria-label={item.label}
             className={({ isActive }) =>
-              `rounded-[var(--radius-md)] text-sm font-medium transition ${
+              `rounded-[var(--radius-md)] text-sm font-medium transition-[background-color,color] duration-150 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${
                 collapsed
                   ? 'min-w-[2.5rem] px-2 py-2 text-center md:min-w-0 md:px-2'
                   : 'whitespace-nowrap px-3 py-2'

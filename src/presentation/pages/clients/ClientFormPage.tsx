@@ -14,6 +14,7 @@ const EMPTY_FORM: ClientInput = {
   name: '',
   email: '',
   phone: '',
+  address: '',
   document: '',
   notes: '',
 }
@@ -24,6 +25,7 @@ function toForm(client: Client | null): ClientInput {
     name: client.name,
     email: client.email,
     phone: client.phone,
+    address: client.address,
     document: client.document,
     notes: client.notes,
   }
@@ -79,8 +81,19 @@ function ClientFormFields({ initial, isEdit, onSubmit }: ClientFormFieldsProps) 
       <Input
         label="Telefone"
         name="phone"
+        type="tel"
+        autoComplete="tel"
         value={form.phone}
         onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
+      />
+      <Input
+        label="Endereço"
+        name="address"
+        autoComplete="street-address"
+        value={form.address}
+        onChange={(event) =>
+          setForm((prev) => ({ ...prev, address: event.target.value }))
+        }
       />
       <Input
         label="Documento"

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { Sale, SaleInput } from '@/domain/types'
+import type { ClientCommercialInsight, Sale, SaleInput } from '@/domain/types'
 import { AppError } from '@/lib/errors'
 import * as salesService from '@/services/sales.service'
 
@@ -119,4 +119,49 @@ export function useSale(id: string | undefined) {
   }
 
   return { sale, loading, error, refresh }
+}
+
+export function useClientCommercialInsight(clientId: string | undefined) {
+  const [insight, setInsight] = useState<ClientCommercialInsight | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!clientId) {
+      setInsight(null)
+      setLoading(false)
+      setError(null)
+      return
+    }
+
+    let active = true
+    setLoading(true)
+    setError(null)
+
+    void salesService
+      .getClientCommercialInsight(clientId)
+      .then((data) => {
+        if (active) {
+          setInsight(data)
+          setLoading(false)
+        }
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          setInsight(null)
+          setError(
+            err instanceof AppError
+              ? err.message
+              : 'Erro ao carregar histórico do cliente.',
+          )
+          setLoading(false)
+        }
+      })
+
+    return () => {
+      active = false
+    }
+  }, [clientId])
+
+  return { insight, loading, error }
 }

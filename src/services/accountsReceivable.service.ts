@@ -9,6 +9,7 @@ import {
   query,
   serverTimestamp,
   updateDoc,
+  where,
 } from 'firebase/firestore'
 import type {
   AccountReceivable,
@@ -58,6 +59,9 @@ function mapAccount(
     amount: requireNumber(data, 'amount'),
     dueDate: requireString(data, 'dueDate'),
     status: isStatus(statusRaw) ? statusRaw : 'pendente',
+    clientId: requireString(data, 'clientId'),
+    clientName: requireString(data, 'clientName'),
+    saleId: requireString(data, 'saleId') || null,
     createdAt: toIsoString(data.createdAt),
     updatedAt: toIsoString(data.updatedAt),
   }
@@ -71,6 +75,52 @@ export async function listAccountsReceivable(): Promise<AccountReceivable[]> {
     return snapshot.docs.map((item) => mapAccount(mapDocId(item), item.data()))
   } catch (error) {
     throw toAppError(error, 'Não foi possível carregar as contas a receber.')
+  }
+}
+
+export async function listAccountsReceivableByClientId(
+  clientId: string,
+): Promise<AccountReceivable[]> {
+  if (!clientId) return []
+
+  try {
+    const snapshot = await getDocs(
+      query(
+        collection(db, COLLECTION),
+        where('clientId', '==', clientId),
+        orderBy('dueDate', 'asc'),
+      ),
+    )
+    return snapshot.docs.map((item) => mapAccount(mapDocId(item), item.data()))
+  } catch (error) {
+    // Fallback sem índice composto: filtra em memória.
+    try {
+      const all = await listAccountsReceivable()
+      return all
+        .filter((item) => item.clientId === clientId)
+        .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+    } catch {
+      throw toAppError(
+        error,
+        'Não foi possível carregar os débitos do cliente.',
+      )
+    }
+  }
+}
+
+export async function findAccountReceivableBySaleId(
+  saleId: string,
+): Promise<AccountReceivable | null> {
+  if (!saleId) return null
+
+  try {
+    const snapshot = await getDocs(
+      query(collection(db, COLLECTION), where('saleId', '==', saleId)),
+    )
+    const first = snapshot.docs[0]
+    return first ? mapAccount(first.id, first.data()) : null
+  } catch (error) {
+    throw toAppError(error, 'Não foi possível localizar a conta da venda.')
   }
 }
 
@@ -99,6 +149,9 @@ export async function createAccountReceivable(
       amount: input.amount,
       dueDate: input.dueDate,
       status: input.status,
+      clientId: input.clientId.trim(),
+      clientName: input.clientName.trim(),
+      saleId: input.saleId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })
@@ -120,6 +173,9 @@ export async function updateAccountReceivable(
       amount: input.amount,
       dueDate: input.dueDate,
       status: input.status,
+      clientId: input.clientId.trim(),
+      clientName: input.clientName.trim(),
+      saleId: input.saleId,
       updatedAt: serverTimestamp(),
     })
   } catch (error) {
