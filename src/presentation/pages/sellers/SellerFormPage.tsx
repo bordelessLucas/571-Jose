@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import type { Seller, SellerInput } from '@/domain/types'
 import { AppError } from '@/lib/errors'
 import { useSeller, useSellerMutations } from '@/hooks/useSellers'
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges'
 import { Alert } from '@/presentation/components/ui/Alert'
 import { Button } from '@/presentation/components/ui/Button'
 import { Input } from '@/presentation/components/ui/Input'
@@ -37,6 +38,7 @@ function SellerFormFields({ initial, isEdit, onSubmit }: SellerFormFieldsProps) 
   const [form, setForm] = useState(initial)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  useUnsavedChanges(!submitting && JSON.stringify(form) !== JSON.stringify(initial))
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

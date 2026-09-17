@@ -9,6 +9,7 @@ import { CASH_MOVEMENT_TYPE_LABELS } from '@/domain/types'
 import { AppError } from '@/lib/errors'
 import { todayInputValue } from '@/lib/format'
 import { useCashMovement, useCashMutations } from '@/hooks/useCash'
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges'
 import { Alert } from '@/presentation/components/ui/Alert'
 import { Button } from '@/presentation/components/ui/Button'
 import { Input } from '@/presentation/components/ui/Input'
@@ -48,6 +49,7 @@ function FormFields({ initial, isEdit, onSubmit }: FormFieldsProps) {
   const [form, setForm] = useState(initial)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  useUnsavedChanges(!submitting && JSON.stringify(form) !== JSON.stringify(initial))
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

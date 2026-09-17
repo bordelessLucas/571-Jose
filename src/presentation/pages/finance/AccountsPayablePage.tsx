@@ -5,6 +5,7 @@ import { FINANCIAL_STATUS_LABELS } from '@/domain/types'
 import { formatCurrency, formatDate } from '@/lib/format'
 import { isOverdue } from '@/lib/finance'
 import { useAccountsPayable } from '@/hooks/useAccountsPayable'
+import { useUrlSyncedState } from '@/hooks/useUrlSyncedState'
 import { Alert } from '@/presentation/components/ui/Alert'
 import { Button } from '@/presentation/components/ui/Button'
 import { ConfirmDialog } from '@/presentation/components/ui/ConfirmDialog'
@@ -25,7 +26,8 @@ const STATUS_FILTER_OPTIONS = [
 ]
 
 export function AccountsPayablePage() {
-  const [statusFilter, setStatusFilter] = useState<FinancialStatus | 'all'>('all')
+  const [statusFilter, setStatusFilter] =
+    useUrlSyncedState<FinancialStatus | 'all'>('status', 'all')
   const { accounts, loading, error, remove } = useAccountsPayable(statusFilter)
   const [pendingDelete, setPendingDelete] = useState<AccountPayable | null>(null)
   const [deleting, setDeleting] = useState(false)

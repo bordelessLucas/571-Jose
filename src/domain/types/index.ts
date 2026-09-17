@@ -228,6 +228,15 @@ export type DrePeriodFilter = {
 
 export type DreSummary = {
   receitas: number
+  deducoes: number
+  receitaLiquida: number
+  custos: number
+  lucroBruto: number
+  despesasOperacionais: number
+  despesasAdministrativas: number
+  despesasComerciais: number
+  despesasFinanceiras: number
+  outrasDespesas: number
   despesas: number
   resultado: number
   salesCount: number

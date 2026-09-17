@@ -78,9 +78,11 @@ Ordem sequencial sugerida. Marque os itens conforme conclusão.
 - [x] Revisar fluxos de cadastro (clientes, vendedores, estoque)
 - [x] Revisar fluxos financeiros (despesas, pagar/receber, caixa)
 - [x] Revisar vendas e relacionamentos
-- [ ] Smoke test de login/logout (manual em ambiente)
+- [x] Smoke test de login/logout (validado via Firebase SDK em ambiente publicado)
 - [x] Ajustes de UI conforme `design_system.md`
-- [ ] Deploy da v1 (Firebase Hosting) e checklist de aceite
+- [x] Configuracao Firebase Hosting para deploy da v1
+- [x] Deploy da v1 (Firebase Hosting)
+- [x] Checklist de aceite funcional dos fluxos principais
 
 ---
 

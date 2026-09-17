@@ -4,6 +4,7 @@ import type { Sale } from '@/domain/types'
 import { FISCAL_STATUS_LABELS } from '@/domain/types'
 import { formatCurrency, formatDate, todayInputValue } from '@/lib/format'
 import { useSales } from '@/hooks/useSales'
+import { useUrlSyncedState } from '@/hooks/useUrlSyncedState'
 import { Alert } from '@/presentation/components/ui/Alert'
 import { Button } from '@/presentation/components/ui/Button'
 import { ConfirmDialog } from '@/presentation/components/ui/ConfirmDialog'
@@ -35,7 +36,7 @@ function matchesSaleFilter(sale: Sale, rawFilter: string): boolean {
 
 export function SalesPage() {
   const { sales, loading, error, remove } = useSales()
-  const [filter, setFilter] = useState('')
+  const [filter, setFilter] = useUrlSyncedState<string>('q', '')
   const [pendingDelete, setPendingDelete] = useState<Sale | null>(null)
   const [deleting, setDeleting] = useState(false)
 

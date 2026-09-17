@@ -13,6 +13,7 @@ import {
   useAccountReceivableMutations,
 } from '@/hooks/useAccountsReceivable'
 import { useClients } from '@/hooks/useClients'
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges'
 import { Alert } from '@/presentation/components/ui/Alert'
 import { Button } from '@/presentation/components/ui/Button'
 import { Input } from '@/presentation/components/ui/Input'
@@ -59,6 +60,7 @@ function FormFields({ initial, isEdit, clientOptions, onSubmit }: FormFieldsProp
   const [form, setForm] = useState(initial)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  useUnsavedChanges(!submitting && JSON.stringify(form) !== JSON.stringify(initial))
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

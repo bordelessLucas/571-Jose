@@ -23,6 +23,7 @@ import {
   useSaleMutations,
 } from '@/hooks/useSales'
 import { useSellers } from '@/hooks/useSellers'
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges'
 import { Alert } from '@/presentation/components/ui/Alert'
 import { Button } from '@/presentation/components/ui/Button'
 import { Input } from '@/presentation/components/ui/Input'
@@ -214,6 +215,7 @@ function SaleFormFields({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dueDateTouched, setDueDateTouched] = useState(isEdit)
+  useUnsavedChanges(!submitting && JSON.stringify(form) !== JSON.stringify(initial))
 
   const filteredSellers = useMemo(
     () =>
