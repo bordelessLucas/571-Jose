@@ -8,6 +8,7 @@ import { ConfirmDialog } from '@/presentation/components/ui/ConfirmDialog'
 import { DataTable } from '@/presentation/components/ui/DataTable'
 import { PageHeader } from '@/presentation/components/ui/PageHeader'
 import { Spinner } from '@/presentation/components/ui/Spinner'
+import { StatusBadge } from '@/presentation/components/ui/StatusBadge'
 
 export function ClientsPage() {
   const { clients, loading, error, remove } = useClients()
@@ -53,7 +54,7 @@ export function ClientsPage() {
           rows={clients}
           rowKey={(row) => row.id}
           emptyTitle="Nenhum cliente cadastrado"
-          emptyDescription="Cadastre clientes para usá-los nas vendas e no controle de débitos."
+          emptyDescription="Cadastre clientes para usa-los nas vendas e no controle de debitos."
           emptyAction={
             <Link to="/clientes/novo">
               <Button>Novo cliente</Button>
@@ -61,23 +62,33 @@ export function ClientsPage() {
           }
           columns={[
             { key: 'name', header: 'Nome', render: (row) => row.name },
-            { key: 'email', header: 'E-mail', render: (row) => row.email || '—' },
-            { key: 'phone', header: 'Telefone', render: (row) => row.phone || '—' },
+            { key: 'email', header: 'E-mail', render: (row) => row.email || '-' },
+            { key: 'phone', header: 'Telefone', render: (row) => row.phone || '-' },
             {
               key: 'address',
-              header: 'Endereço',
+              header: 'Endereco',
               render: (row) => (
-                <span className="line-clamp-2 max-w-xs">{row.address || '—'}</span>
+                <span className="line-clamp-2 max-w-xs">{row.address || '-'}</span>
               ),
             },
             {
               key: 'document',
               header: 'Documento',
-              render: (row) => row.document || '—',
+              render: (row) => row.document || '-',
+            },
+            {
+              key: 'fiscal',
+              header: 'Fiscal',
+              render: (row) =>
+                row.address && row.city && row.state && row.zipCode ? (
+                  <StatusBadge label="Completo" tone="success" />
+                ) : (
+                  <StatusBadge label="Pendente" tone="warning" />
+                ),
             },
             {
               key: 'actions',
-              header: 'Ações',
+              header: 'Acoes',
               align: 'right',
               render: (row) => (
                 <div className="flex flex-wrap justify-end gap-2">
@@ -99,7 +110,7 @@ export function ClientsPage() {
         title="Excluir cliente?"
         description={
           pendingDelete
-            ? `O cliente "${pendingDelete.name}" será removido do cadastro.`
+            ? `O cliente "${pendingDelete.name}" sera removido do cadastro.`
             : ''
         }
         confirmLabel="Excluir cliente"

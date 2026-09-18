@@ -152,6 +152,11 @@ async function resolveSaleRelations(input: SaleInput): Promise<{
   sellerName: string
   productName: string
   productUnit: string
+  productSku: string
+  productNcm: string
+  productCfop: string
+  productIcmsOrigin: string
+  productIcmsSituation: string
   stockQuantity: number
   amount: number
 }> {
@@ -170,6 +175,11 @@ async function resolveSaleRelations(input: SaleInput): Promise<{
     sellerName: seller.name,
     productName: product.name,
     productUnit: product.unit,
+    productSku: product.sku,
+    productNcm: product.ncm,
+    productCfop: product.cfop,
+    productIcmsOrigin: product.icmsOrigin,
+    productIcmsSituation: product.icmsSituation,
     stockQuantity: product.quantity,
     amount: computeSaleAmount(input),
   }
@@ -256,6 +266,14 @@ async function emitNfeForSale(
   description: string,
   soldAt: string,
   client: Client,
+  fiscalProduct: {
+    sku: string
+    unit: string
+    ncm: string
+    cfop: string
+    icmsOrigin: string
+    icmsSituation: string
+  },
   options: { reissue?: boolean } = {},
 ) {
   const reissue = Boolean(options.reissue)
@@ -278,6 +296,20 @@ async function emitNfeForSale(
     recipientDocument: client.document || '00000000000',
     recipientEmail: client.email,
     recipientPhone: client.phone,
+    recipientAddress: client.address,
+    recipientAddressNumber: client.addressNumber,
+    recipientDistrict: client.district,
+    recipientCity: client.city,
+    recipientState: client.state,
+    recipientZipCode: client.zipCode,
+    recipientStateRegistration: client.stateRegistration,
+    recipientStateRegistrationIndicator: client.stateRegistrationIndicator,
+    productCode: fiscalProduct.sku || saleId.slice(0, 12),
+    productUnit: fiscalProduct.unit,
+    productNcm: fiscalProduct.ncm,
+    productCfop: fiscalProduct.cfop,
+    productIcmsOrigin: fiscalProduct.icmsOrigin,
+    productIcmsSituation: fiscalProduct.icmsSituation,
     reissue,
   })
 
@@ -446,6 +478,14 @@ export async function createSale(input: SaleInput): Promise<string> {
         payload.description,
         input.soldAt,
         relations.client,
+        {
+          sku: relations.productSku,
+          unit: relations.productUnit,
+          ncm: relations.productNcm,
+          cfop: relations.productCfop,
+          icmsOrigin: relations.productIcmsOrigin,
+          icmsSituation: relations.productIcmsSituation,
+        },
       )
     } catch (fiscalError) {
       await updateDoc(doc(db, COLLECTION, ref.id), {
@@ -533,13 +573,24 @@ export async function deleteSale(id: string): Promise<void> {
 /** Reprocessa NF-e de uma venda já existente (cancela a anterior). */
 export async function reemitNfeForSale(saleId: string): Promise<void> {
   const sale = await getSaleById(saleId)
-  const client = await getClientById(sale.clientId)
+  const [client, product] = await Promise.all([
+    getClientById(sale.clientId),
+    getInventoryItemById(sale.productId),
+  ])
   await emitNfeForSale(
     saleId,
     sale.amount,
     sale.description,
     sale.soldAt,
     client,
+    {
+      sku: product.sku,
+      unit: product.unit,
+      ncm: product.ncm,
+      cfop: product.cfop,
+      icmsOrigin: product.icmsOrigin,
+      icmsSituation: product.icmsSituation,
+    },
     { reissue: true },
   )
 }

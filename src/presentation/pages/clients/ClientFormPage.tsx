@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import type { Client, ClientInput } from '@/domain/types'
 import { AppError } from '@/lib/errors'
@@ -8,6 +8,7 @@ import { Alert } from '@/presentation/components/ui/Alert'
 import { Button } from '@/presentation/components/ui/Button'
 import { Input } from '@/presentation/components/ui/Input'
 import { PageHeader } from '@/presentation/components/ui/PageHeader'
+import { Select } from '@/presentation/components/ui/Select'
 import { Spinner } from '@/presentation/components/ui/Spinner'
 import { TextArea } from '@/presentation/components/ui/TextArea'
 
@@ -16,7 +17,14 @@ const EMPTY_FORM: ClientInput = {
   email: '',
   phone: '',
   address: '',
+  addressNumber: '',
+  district: '',
+  city: '',
+  state: '',
+  zipCode: '',
   document: '',
+  stateRegistration: '',
+  stateRegistrationIndicator: '9',
   notes: '',
 }
 
@@ -27,9 +35,34 @@ function toForm(client: Client | null): ClientInput {
     email: client.email,
     phone: client.phone,
     address: client.address,
+    addressNumber: client.addressNumber,
+    district: client.district,
+    city: client.city,
+    state: client.state,
+    zipCode: client.zipCode,
     document: client.document,
+    stateRegistration: client.stateRegistration,
+    stateRegistrationIndicator: client.stateRegistrationIndicator,
     notes: client.notes,
   }
+}
+
+type ViaCepResponse = {
+  erro?: boolean
+  logradouro?: string
+  bairro?: string
+  localidade?: string
+  uf?: string
+}
+
+function onlyDigits(value: string): string {
+  return value.replace(/\D/g, '')
+}
+
+function formatCep(value: string): string {
+  const digits = onlyDigits(value).slice(0, 8)
+  if (digits.length <= 5) return digits
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`
 }
 
 type ClientFormFieldsProps = {
@@ -42,7 +75,54 @@ function ClientFormFields({ initial, isEdit, onSubmit }: ClientFormFieldsProps) 
   const [form, setForm] = useState(initial)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [cepStatus, setCepStatus] = useState<'idle' | 'loading' | 'found' | 'not_found' | 'error'>('idle')
+  const lastCepLookup = useRef('')
   useUnsavedChanges(!submitting && JSON.stringify(form) !== JSON.stringify(initial))
+
+  useEffect(() => {
+    const cep = onlyDigits(form.zipCode)
+
+    if (cep.length !== 8) {
+      lastCepLookup.current = ''
+      setCepStatus('idle')
+      return
+    }
+
+    if (lastCepLookup.current === cep) return
+    lastCepLookup.current = cep
+    setCepStatus('loading')
+
+    const controller = new AbortController()
+
+    fetch(`https://viacep.com.br/ws/${cep}/json/`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('CEP indisponivel')
+        return (await response.json()) as ViaCepResponse
+      })
+      .then((data) => {
+        if (data.erro) {
+          setCepStatus('not_found')
+          return
+        }
+
+        setForm((prev) => ({
+          ...prev,
+          address: prev.address || data.logradouro || '',
+          district: prev.district || data.bairro || '',
+          city: prev.city || data.localidade || '',
+          state: prev.state || data.uf || '',
+        }))
+        setCepStatus('found')
+      })
+      .catch((fetchError) => {
+        if (fetchError instanceof DOMException && fetchError.name === 'AbortError') {
+          return
+        }
+        setCepStatus('error')
+      })
+
+    return () => controller.abort()
+  }, [form.zipCode])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -52,7 +132,7 @@ function ClientFormFields({ initial, isEdit, onSubmit }: ClientFormFieldsProps) 
     try {
       await onSubmit(form)
     } catch (err) {
-      setError(err instanceof AppError ? err.message : 'Não foi possível salvar.')
+      setError(err instanceof AppError ? err.message : 'Nao foi possivel salvar.')
     } finally {
       setSubmitting(false)
     }
@@ -73,46 +153,134 @@ function ClientFormFields({ initial, isEdit, onSubmit }: ClientFormFieldsProps) 
         onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
         required
       />
+      <div className="grid gap-4 md:grid-cols-2">
+        <Input
+          label="Documento"
+          name="document"
+          value={form.document}
+          onChange={(event) =>
+            setForm((prev) => ({ ...prev, document: onlyDigits(event.target.value) }))
+          }
+        />
+        <Select
+          label="Indicador IE"
+          name="stateRegistrationIndicator"
+          value={form.stateRegistrationIndicator}
+          options={[
+            { value: '9', label: 'Nao contribuinte' },
+            { value: '1', label: 'Contribuinte' },
+            { value: '2', label: 'Isento' },
+          ]}
+          onChange={(event) =>
+            setForm((prev) => ({
+              ...prev,
+              stateRegistrationIndicator: event.target
+                .value as ClientInput['stateRegistrationIndicator'],
+            }))
+          }
+        />
+      </div>
       <Input
-        label="E-mail"
-        name="email"
-        type="email"
-        value={form.email}
-        onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
-      />
-      <Input
-        label="Telefone"
-        name="phone"
-        type="tel"
-        autoComplete="tel"
-        value={form.phone}
-        onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
-      />
-      <Input
-        label="Endereço"
-        name="address"
-        autoComplete="street-address"
-        value={form.address}
+        label="Inscricao estadual"
+        name="stateRegistration"
+        value={form.stateRegistration}
         onChange={(event) =>
-          setForm((prev) => ({ ...prev, address: event.target.value }))
+          setForm((prev) => ({ ...prev, stateRegistration: event.target.value }))
         }
       />
+      <div className="grid gap-4 md:grid-cols-2">
+        <Input
+          label="E-mail"
+          name="email"
+          type="email"
+          value={form.email}
+          onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+        />
+        <Input
+          label="Telefone"
+          name="phone"
+          type="tel"
+          autoComplete="tel"
+          value={form.phone}
+          onChange={(event) =>
+            setForm((prev) => ({ ...prev, phone: onlyDigits(event.target.value) }))
+          }
+        />
+      </div>
+      <div className="grid gap-4 md:grid-cols-[1fr_140px]">
+        <Input
+          label="Endereco fiscal"
+          name="address"
+          autoComplete="street-address"
+          value={form.address}
+          onChange={(event) =>
+            setForm((prev) => ({ ...prev, address: event.target.value }))
+          }
+        />
+        <Input
+          label="Numero"
+          name="addressNumber"
+          value={form.addressNumber}
+          onChange={(event) =>
+            setForm((prev) => ({ ...prev, addressNumber: event.target.value }))
+          }
+        />
+      </div>
+      <div className="grid gap-4 md:grid-cols-4">
+        <Input
+          label="Bairro"
+          name="district"
+          value={form.district}
+          onChange={(event) =>
+            setForm((prev) => ({ ...prev, district: event.target.value }))
+          }
+        />
+        <Input
+          label="Municipio"
+          name="city"
+          value={form.city}
+          onChange={(event) =>
+            setForm((prev) => ({ ...prev, city: event.target.value }))
+          }
+          className="md:col-span-2"
+        />
+        <Input
+          label="UF"
+          name="state"
+          maxLength={2}
+          value={form.state}
+          onChange={(event) =>
+            setForm((prev) => ({ ...prev, state: event.target.value.toUpperCase() }))
+          }
+        />
+      </div>
       <Input
-        label="Documento"
-        name="document"
-        value={form.document}
+        label="CEP"
+        name="zipCode"
+        value={form.zipCode}
+        hint={
+          cepStatus === 'loading'
+            ? 'Buscando endereco...'
+            : cepStatus === 'found'
+              ? 'Endereco localizado pelo CEP.'
+              : cepStatus === 'not_found'
+                ? 'CEP nao encontrado. Preencha manualmente.'
+                : cepStatus === 'error'
+                  ? 'Nao foi possivel consultar o CEP agora.'
+                  : 'Digite 8 numeros para buscar endereco.'
+        }
         onChange={(event) =>
-          setForm((prev) => ({ ...prev, document: event.target.value }))
+          setForm((prev) => ({ ...prev, zipCode: formatCep(event.target.value) }))
         }
       />
       <TextArea
-        label="Observações"
+        label="Observacoes"
         name="notes"
         value={form.notes}
         onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
       />
       <Button type="submit" disabled={submitting}>
-        {submitting ? 'Salvando…' : isEdit ? 'Salvar alterações' : 'Salvar'}
+        {submitting ? 'Salvando...' : isEdit ? 'Salvar alteracoes' : 'Salvar'}
       </Button>
     </form>
   )
@@ -130,14 +298,14 @@ export function ClientFormPage() {
   }
 
   if (isEdit && !client) {
-    return <Alert tone="danger">{loadError ?? 'Cliente não encontrado.'}</Alert>
+    return <Alert tone="danger">{loadError ?? 'Cliente nao encontrado.'}</Alert>
   }
 
   return (
     <div className="max-w-2xl">
       <PageHeader
         title={isEdit ? 'Editar cliente' : 'Novo cliente'}
-        description="Informe os dados básicos e de contato."
+        description="Informe os dados de contato e fiscais."
         backTo="/clientes"
       />
 

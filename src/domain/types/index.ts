@@ -10,7 +10,14 @@ export type Client = {
   email: string
   phone: string
   address: string
+  addressNumber: string
+  district: string
+  city: string
+  state: string
+  zipCode: string
   document: string
+  stateRegistration: string
+  stateRegistrationIndicator: '1' | '2' | '9'
   notes: string
   createdAt: string
   updatedAt: string
@@ -21,7 +28,14 @@ export type ClientInput = {
   email: string
   phone: string
   address: string
+  addressNumber: string
+  district: string
+  city: string
+  state: string
+  zipCode: string
   document: string
+  stateRegistration: string
+  stateRegistrationIndicator: '1' | '2' | '9'
   notes: string
 }
 
@@ -208,6 +222,10 @@ export type InventoryItem = {
   sku: string
   quantity: number
   unit: string
+  ncm: string
+  cfop: string
+  icmsOrigin: string
+  icmsSituation: string
   notes: string
   createdAt: string
   updatedAt: string
@@ -218,6 +236,10 @@ export type InventoryItemInput = {
   sku: string
   quantity: number
   unit: string
+  ncm: string
+  cfop: string
+  icmsOrigin: string
+  icmsSituation: string
   notes: string
 }
 
@@ -255,6 +277,20 @@ export type FiscalInvoiceRequest = {
   recipientDocument: string
   recipientEmail?: string
   recipientPhone?: string
+  recipientAddress?: string
+  recipientAddressNumber?: string
+  recipientDistrict?: string
+  recipientCity?: string
+  recipientState?: string
+  recipientZipCode?: string
+  recipientStateRegistration?: string
+  recipientStateRegistrationIndicator?: '1' | '2' | '9'
+  productCode?: string
+  productUnit?: string
+  productNcm?: string
+  productCfop?: string
+  productIcmsOrigin?: string
+  productIcmsSituation?: string
   /** Quando true, gera nova ref Focus e cancela docs ativos anteriores. */
   reissue?: boolean
 }

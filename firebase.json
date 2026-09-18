@@ -8,12 +8,19 @@
     ],
     "rewrites": [
       {
+        "source": "/api/focus/nfe",
+        "function": "emitNfe"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
     ],
     "cleanUrls": true,
     "trailingSlash": false
+  },
+  "functions": {
+    "source": "functions"
   },
   "firestore": {
     "rules": "firestore.rules",

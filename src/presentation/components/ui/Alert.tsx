@@ -1,6 +1,8 @@
+import type { ReactNode } from 'react'
+
 type AlertProps = {
   tone?: 'danger' | 'success' | 'info' | 'warning'
-  children: string
+  children: ReactNode
 }
 
 const toneClass = {

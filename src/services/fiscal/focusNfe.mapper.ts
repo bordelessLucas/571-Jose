@@ -24,7 +24,8 @@ export type FocusNfePayload = {
   nome_destinatario: string
   cpf_destinatario?: string
   cnpj_destinatario?: string
-  indicador_inscricao_estadual_destinatario: '9'
+  indicador_inscricao_estadual_destinatario: '1' | '2' | '9'
+  inscricao_estadual_destinatario?: string
   logradouro_destinatario: string
   numero_destinatario: string
   bairro_destinatario: string
@@ -99,13 +100,16 @@ export function mapSaleToFocusNfePayload(
     regime_tributario_emitente: emitente.regimeTributario,
     nome_destinatario: request.recipientName,
     ...(isCnpj ? { cnpj_destinatario: doc } : { cpf_destinatario: doc || '00000000000' }),
-    indicador_inscricao_estadual_destinatario: '9',
-    logradouro_destinatario: 'Nao informado',
-    numero_destinatario: 'S/N',
-    bairro_destinatario: 'Centro',
-    municipio_destinatario: emitente.municipio,
-    uf_destinatario: emitente.uf,
-    cep_destinatario: onlyDigits(emitente.cep),
+    indicador_inscricao_estadual_destinatario:
+      request.recipientStateRegistrationIndicator ?? '9',
+    inscricao_estadual_destinatario:
+      request.recipientStateRegistration || undefined,
+    logradouro_destinatario: request.recipientAddress || 'Nao informado',
+    numero_destinatario: request.recipientAddressNumber || 'S/N',
+    bairro_destinatario: request.recipientDistrict || 'Centro',
+    municipio_destinatario: request.recipientCity || emitente.municipio,
+    uf_destinatario: request.recipientState || emitente.uf,
+    cep_destinatario: onlyDigits(request.recipientZipCode || emitente.cep),
     pais_destinatario: 'Brasil',
     telefone_destinatario: request.recipientPhone
       ? onlyDigits(request.recipientPhone)
@@ -114,19 +118,19 @@ export function mapSaleToFocusNfePayload(
     items: [
       {
         numero_item: '1',
-        codigo_produto: request.referenceId.slice(0, 12),
+        codigo_produto: request.productCode || request.referenceId.slice(0, 12),
         descricao: request.description || 'Venda comercial',
-        cfop: '5102',
-        unidade_comercial: 'UN',
+        cfop: request.productCfop || '5102',
+        unidade_comercial: request.productUnit || 'UN',
         quantidade_comercial: '1.0000',
         valor_unitario_comercial: amount,
         valor_unitario_tributavel: amount,
-        unidade_tributavel: 'UN',
-        codigo_ncm: '00000000',
+        unidade_tributavel: request.productUnit || 'UN',
+        codigo_ncm: onlyDigits(request.productNcm || '00000000'),
         quantidade_tributavel: '1.0000',
         valor_bruto: amount,
-        icms_origem: '0',
-        icms_situacao_tributaria: '102',
+        icms_origem: request.productIcmsOrigin || '0',
+        icms_situacao_tributaria: request.productIcmsSituation || '102',
       },
     ],
   }

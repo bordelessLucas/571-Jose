@@ -1,53 +1,24 @@
 import type { FiscalInvoiceRequest, FiscalInvoiceResult } from '@/domain/types'
+import { getAuth } from 'firebase/auth'
 import type { FiscalEmitterPort } from '@/services/fiscal/fiscal.port'
-import {
-  getFocusNfeBaseUrl,
-  getFocusNfeToken,
-  isFocusTokenTemplate,
-} from '@/services/fiscal/focusNfe.config'
-import { buildFocusRef, mapSaleToFocusNfePayload } from '@/services/fiscal/focusNfe.mapper'
+import { getFocusNfeProxyUrl } from '@/services/fiscal/focusNfe.config'
+import { buildFocusRef } from '@/services/fiscal/focusNfe.mapper'
 
-type FocusHttpResponse = {
-  status?: string
-  mensagem?: string
-  protocolo?: string
-  chave_nfe?: string
-  caminho_xml_nota_fiscal?: string
-  erros?: unknown
+type ProxyErrorResponse = {
+  message?: string
 }
 
-function mapFocusStatus(status: string | undefined): FiscalInvoiceResult['status'] {
-  switch ((status ?? '').toLowerCase()) {
-    case 'autorizado':
-      return 'authorized'
-    case 'erro_autorizacao':
-    case 'denegado':
-      return 'rejected'
-    case 'cancelado':
-      return 'cancelled'
-    case 'processando_autorizacao':
-      return 'queued'
-    default:
-      return 'queued'
-  }
-}
-
-/**
- * Adapter HTTP real da Focus NFe.
- * Atenção: chamada direta do browser pode falhar por CORS.
- * Em produção, preferir Cloud Function como proxy com o token no servidor.
- */
+/** Adapter HTTP real via Cloud Function, mantendo o token Focus no servidor. */
 export class FocusNfeHttpAdapter implements FiscalEmitterPort {
   async requestInvoice(payload: FiscalInvoiceRequest): Promise<FiscalInvoiceResult> {
-    const token = getFocusNfeToken()
     const focusRef = buildFocusRef(payload.referenceId, Boolean(payload.reissue))
+    const currentUser = getAuth().currentUser
 
-    if (isFocusTokenTemplate(token)) {
+    if (!currentUser) {
       return {
         accepted: false,
         status: 'error',
-        message:
-          'Token Focus NFe ainda é o template. Defina VITE_FOCUS_NFE_TOKEN ou use mode=mock.',
+        message: 'Usuario nao autenticado para emitir NF-e.',
         externalId: null,
         protocol: null,
         focusRef,
@@ -55,42 +26,35 @@ export class FocusNfeHttpAdapter implements FiscalEmitterPort {
       }
     }
 
-    const body = mapSaleToFocusNfePayload(payload)
-    const url = `${getFocusNfeBaseUrl()}/v2/nfe?ref=${encodeURIComponent(focusRef)}`
-    const auth = btoa(`${token}:`)
-
     try {
-      const response = await fetch(url, {
+      const idToken = await currentUser.getIdToken()
+      const response = await fetch(getFocusNfeProxyUrl(), {
         method: 'POST',
         headers: {
-          Authorization: `Basic ${auth}`,
+          Authorization: `Bearer ${idToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       })
 
-      const raw = (await response.json().catch(() => ({}))) as FocusHttpResponse
-      const status = mapFocusStatus(raw.status)
+      const raw = (await response.json().catch(() => ({}))) as
+        | FiscalInvoiceResult
+        | ProxyErrorResponse
 
-      if (response.status === 201 || response.status === 202) {
+      if (response.ok && 'focusRef' in raw) {
         return {
-          accepted: true,
-          status: response.status === 201 ? 'authorized' : status,
-          message: raw.mensagem ?? 'NF-e enviada à Focus NFe.',
-          externalId: raw.chave_nfe ?? null,
-          protocol: raw.protocolo ?? null,
-          focusRef,
-          providerMode: 'live',
-          rawResponse: raw,
+          ...raw,
+          focusRef: raw.focusRef || focusRef,
         }
       }
 
       return {
         accepted: false,
-        status: response.status === 401 ? 'error' : 'rejected',
+        status: 'error',
         message:
-          raw.mensagem ??
-          `Focus NFe retornou HTTP ${response.status}. Verifique token/certificado/payload.`,
+          'message' in raw && raw.message
+            ? raw.message
+            : `Proxy Focus NFe retornou HTTP ${response.status}.`,
         externalId: null,
         protocol: null,
         focusRef,
@@ -101,7 +65,7 @@ export class FocusNfeHttpAdapter implements FiscalEmitterPort {
       const message =
         error instanceof Error
           ? error.message
-          : 'Falha de rede ao chamar Focus NFe (possível CORS — use proxy/Cloud Function).'
+          : 'Falha de rede ao chamar proxy Focus NFe.'
 
       return {
         accepted: false,

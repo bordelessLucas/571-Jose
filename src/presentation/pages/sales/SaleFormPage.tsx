@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type {
+  Client,
   InventoryItem,
   PaymentMethod,
   Sale,
@@ -78,6 +79,7 @@ function toForm(sale: Sale | null): SaleInput {
 type SaleFormFieldsProps = {
   initial: SaleInput
   isEdit: boolean
+  clients: Client[]
   clientOptions: { value: string; label: string }[]
   sellerOptions: { value: string; label: string }[]
   products: InventoryItem[]
@@ -206,6 +208,7 @@ function ClientInsightPanel({ clientId }: { clientId: string }) {
 function SaleFormFields({
   initial,
   isEdit,
+  clients,
   clientOptions,
   sellerOptions,
   products,
@@ -231,6 +234,11 @@ function SaleFormFields({
     [products, form.productId],
   )
 
+  const selectedClient = useMemo(
+    () => clients.find((client) => client.id === form.clientId) ?? null,
+    [clients, form.clientId],
+  )
+
   const availableStock = useMemo(() => {
     if (!selectedProduct) return null
     if (isEdit && initial.productId === form.productId) {
@@ -240,6 +248,29 @@ function SaleFormFields({
   }, [selectedProduct, isEdit, initial.productId, initial.quantity, form.productId])
 
   const total = computeSaleAmount(form)
+
+  const fiscalReadinessIssues = useMemo(() => {
+    const issues: string[] = []
+
+    if (selectedClient) {
+      if (!selectedClient.document) issues.push('cliente sem CPF/CNPJ')
+      if (
+        !selectedClient.address ||
+        !selectedClient.city ||
+        !selectedClient.state ||
+        !selectedClient.zipCode
+      ) {
+        issues.push('endereco fiscal do cliente incompleto')
+      }
+    }
+
+    if (selectedProduct) {
+      if (!selectedProduct.ncm) issues.push('produto sem NCM')
+      if (!selectedProduct.cfop) issues.push('produto sem CFOP')
+    }
+
+    return issues
+  }, [selectedClient, selectedProduct])
 
   const productOptions = products.map((item) => ({
     value: item.id,
@@ -293,6 +324,28 @@ function SaleFormFields({
       </div>
 
       {form.clientId ? <ClientInsightPanel clientId={form.clientId} /> : null}
+
+      {fiscalReadinessIssues.length > 0 ? (
+        <Alert tone="warning">
+          Dados fiscais pendentes: {fiscalReadinessIssues.join(', ')}.
+          {selectedClient ? (
+            <>
+              {' '}
+              <Link className="font-medium underline" to={`/clientes/${selectedClient.id}`}>
+                Revisar cliente
+              </Link>
+            </>
+          ) : null}
+          {selectedProduct ? (
+            <>
+              {' '}
+              <Link className="font-medium underline" to={`/estoque/${selectedProduct.id}`}>
+                Revisar produto
+              </Link>
+            </>
+          ) : null}
+        </Alert>
+      ) : null}
 
       <div className="flex flex-col gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
         {error ? <Alert tone="danger">{error}</Alert> : null}
@@ -563,6 +616,7 @@ export function SaleFormPage() {
         key={sale?.id ?? 'new-sale'}
         initial={toForm(sale)}
         isEdit={isEdit}
+        clients={clients}
         clientOptions={clientOptions}
         sellerOptions={sellerOptions}
         products={products}

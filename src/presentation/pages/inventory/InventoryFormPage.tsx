@@ -8,6 +8,7 @@ import { Alert } from '@/presentation/components/ui/Alert'
 import { Button } from '@/presentation/components/ui/Button'
 import { Input } from '@/presentation/components/ui/Input'
 import { PageHeader } from '@/presentation/components/ui/PageHeader'
+import { Select } from '@/presentation/components/ui/Select'
 import { Spinner } from '@/presentation/components/ui/Spinner'
 import { TextArea } from '@/presentation/components/ui/TextArea'
 
@@ -15,7 +16,11 @@ const EMPTY_FORM: InventoryItemInput = {
   name: '',
   sku: '',
   quantity: 0,
-  unit: 'un',
+  unit: 'UN',
+  ncm: '',
+  cfop: '5102',
+  icmsOrigin: '0',
+  icmsSituation: '102',
   notes: '',
 }
 
@@ -26,6 +31,10 @@ function toForm(item: InventoryItem | null): InventoryItemInput {
     sku: item.sku,
     quantity: item.quantity,
     unit: item.unit,
+    ncm: item.ncm,
+    cfop: item.cfop,
+    icmsOrigin: item.icmsOrigin,
+    icmsSituation: item.icmsSituation,
     notes: item.notes,
   }
 }
@@ -49,7 +58,7 @@ function FormFields({ initial, isEdit, onSubmit }: FormFieldsProps) {
     try {
       await onSubmit(form)
     } catch (err) {
-      setError(err instanceof AppError ? err.message : 'Não foi possível salvar.')
+      setError(err instanceof AppError ? err.message : 'Nao foi possivel salvar.')
     } finally {
       setSubmitting(false)
     }
@@ -70,41 +79,82 @@ function FormFields({ initial, isEdit, onSubmit }: FormFieldsProps) {
         onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
         required
       />
-      <Input
-        label="SKU / código"
-        name="sku"
-        value={form.sku}
-        onChange={(event) => setForm((prev) => ({ ...prev, sku: event.target.value }))}
-      />
-      <Input
-        label="Quantidade"
-        name="quantity"
-        type="number"
-        min="0"
-        step="1"
-        value={form.quantity}
-        onChange={(event) =>
-          setForm((prev) => ({
-            ...prev,
-            quantity: Number.parseFloat(event.target.value) || 0,
-          }))
-        }
-        required
-      />
-      <Input
-        label="Unidade"
-        name="unit"
-        value={form.unit}
-        onChange={(event) => setForm((prev) => ({ ...prev, unit: event.target.value }))}
-      />
+      <div className="grid gap-4 md:grid-cols-3">
+        <Input
+          label="SKU / codigo"
+          name="sku"
+          value={form.sku}
+          onChange={(event) => setForm((prev) => ({ ...prev, sku: event.target.value }))}
+        />
+        <Input
+          label="Quantidade"
+          name="quantity"
+          type="number"
+          min="0"
+          step="1"
+          value={form.quantity}
+          onChange={(event) =>
+            setForm((prev) => ({
+              ...prev,
+              quantity: Number.parseFloat(event.target.value) || 0,
+            }))
+          }
+          required
+        />
+        <Input
+          label="Unidade"
+          name="unit"
+          value={form.unit}
+          onChange={(event) =>
+            setForm((prev) => ({ ...prev, unit: event.target.value.toUpperCase() }))
+          }
+        />
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Input
+          label="NCM"
+          name="ncm"
+          value={form.ncm}
+          onChange={(event) => setForm((prev) => ({ ...prev, ncm: event.target.value }))}
+        />
+        <Input
+          label="CFOP"
+          name="cfop"
+          value={form.cfop}
+          onChange={(event) => setForm((prev) => ({ ...prev, cfop: event.target.value }))}
+        />
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Select
+          label="Origem ICMS"
+          name="icmsOrigin"
+          value={form.icmsOrigin}
+          options={[
+            { value: '0', label: '0 - Nacional' },
+            { value: '1', label: '1 - Estrangeira importacao direta' },
+            { value: '2', label: '2 - Estrangeira mercado interno' },
+          ]}
+          onChange={(event) =>
+            setForm((prev) => ({ ...prev, icmsOrigin: event.target.value }))
+          }
+        />
+        <Input
+          label="CST/CSOSN ICMS"
+          name="icmsSituation"
+          value={form.icmsSituation}
+          onChange={(event) =>
+            setForm((prev) => ({ ...prev, icmsSituation: event.target.value }))
+          }
+        />
+      </div>
       <TextArea
-        label="Observações"
+        label="Observacoes"
         name="notes"
         value={form.notes}
         onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
       />
       <Button type="submit" disabled={submitting}>
-        {submitting ? 'Salvando…' : isEdit ? 'Salvar alterações' : 'Salvar'}
+        {submitting ? 'Salvando...' : isEdit ? 'Salvar alteracoes' : 'Salvar'}
       </Button>
     </form>
   )
@@ -119,14 +169,14 @@ export function InventoryFormPage() {
 
   if (isEdit && loading) return <Spinner />
   if (isEdit && !item) {
-    return <Alert tone="danger">{loadError ?? 'Item não encontrado.'}</Alert>
+    return <Alert tone="danger">{loadError ?? 'Item nao encontrado.'}</Alert>
   }
 
   return (
     <div className="max-w-2xl">
       <PageHeader
         title={isEdit ? 'Editar item' : 'Novo item'}
-        description="Cadastre nome, quantidade e unidade."
+        description="Cadastre estoque e dados fiscais do produto."
         backTo="/estoque"
       />
       <FormFields

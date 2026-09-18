@@ -56,6 +56,17 @@ export function InventoryPage() {
           columns={[
             { key: 'name', header: 'Item', render: (row) => row.name },
             { key: 'sku', header: 'SKU', render: (row) => row.sku || '—' },
+            { key: 'ncm', header: 'NCM', render: (row) => row.ncm || '—' },
+            {
+              key: 'fiscal',
+              header: 'Fiscal',
+              render: (row) =>
+                row.ncm && row.cfop && row.icmsOrigin && row.icmsSituation ? (
+                  <StatusBadge label="Completo" tone="success" />
+                ) : (
+                  <StatusBadge label="Pendente" tone="warning" />
+                ),
+            },
             {
               key: 'quantity',
               header: 'Qtd.',

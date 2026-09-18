@@ -30,6 +30,10 @@ export function getFocusNfeToken(): string {
   return readEnv('VITE_FOCUS_NFE_TOKEN', 'FOCUS_NFE_TOKEN_TEMPLATE_REPLACE_ME')
 }
 
+export function getFocusNfeProxyUrl(): string {
+  return readEnv('VITE_FOCUS_NFE_PROXY_URL', '/api/focus/nfe')
+}
+
 export function getFocusNfeMode(): FiscalProviderMode {
   const mode = readEnv('VITE_FOCUS_NFE_MODE', 'mock').toLowerCase()
   return mode === 'live' ? 'live' : 'mock'

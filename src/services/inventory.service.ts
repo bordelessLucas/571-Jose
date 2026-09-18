@@ -24,10 +24,10 @@ const COLLECTION = 'inventoryItems'
 
 function validateInput(input: InventoryItemInput): void {
   if (!input.name.trim()) {
-    throw new AppError('validation', 'Nome do item é obrigatório.')
+    throw new AppError('validation', 'Nome do item e obrigatorio.')
   }
   if (input.quantity < 0 || !Number.isFinite(input.quantity)) {
-    throw new AppError('validation', 'Quantidade inválida.')
+    throw new AppError('validation', 'Quantidade invalida.')
   }
 }
 
@@ -38,9 +38,27 @@ function mapItem(id: string, data: Record<string, unknown>): InventoryItem {
     sku: requireString(data, 'sku'),
     quantity: requireNumber(data, 'quantity'),
     unit: requireString(data, 'unit') || 'un',
+    ncm: requireString(data, 'ncm'),
+    cfop: requireString(data, 'cfop') || '5102',
+    icmsOrigin: requireString(data, 'icmsOrigin') || '0',
+    icmsSituation: requireString(data, 'icmsSituation') || '102',
     notes: requireString(data, 'notes'),
     createdAt: toIsoString(data.createdAt),
     updatedAt: toIsoString(data.updatedAt),
+  }
+}
+
+function toInventoryPayload(input: InventoryItemInput) {
+  return {
+    name: input.name.trim(),
+    sku: input.sku.trim(),
+    quantity: input.quantity,
+    unit: input.unit.trim() || 'un',
+    ncm: input.ncm.trim(),
+    cfop: input.cfop.trim() || '5102',
+    icmsOrigin: input.icmsOrigin.trim() || '0',
+    icmsSituation: input.icmsSituation.trim() || '102',
+    notes: input.notes.trim(),
   }
 }
 
@@ -51,7 +69,7 @@ export async function listInventoryItems(): Promise<InventoryItem[]> {
     )
     return snapshot.docs.map((item) => mapItem(mapDocId(item), item.data()))
   } catch (error) {
-    throw toAppError(error, 'Não foi possível carregar o estoque.')
+    throw toAppError(error, 'Nao foi possivel carregar o estoque.')
   }
 }
 
@@ -59,11 +77,11 @@ export async function getInventoryItemById(id: string): Promise<InventoryItem> {
   try {
     const snapshot = await getDoc(doc(db, COLLECTION, id))
     if (!snapshot.exists()) {
-      throw new AppError('not_found', 'Item de estoque não encontrado.')
+      throw new AppError('not_found', 'Item de estoque nao encontrado.')
     }
     return mapItem(snapshot.id, snapshot.data())
   } catch (error) {
-    throw toAppError(error, 'Não foi possível carregar o item.')
+    throw toAppError(error, 'Nao foi possivel carregar o item.')
   }
 }
 
@@ -74,17 +92,13 @@ export async function createInventoryItem(
 
   try {
     const ref = await addDoc(collection(db, COLLECTION), {
-      name: input.name.trim(),
-      sku: input.sku.trim(),
-      quantity: input.quantity,
-      unit: input.unit.trim() || 'un',
-      notes: input.notes.trim(),
+      ...toInventoryPayload(input),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })
     return ref.id
   } catch (error) {
-    throw toAppError(error, 'Não foi possível cadastrar o item.')
+    throw toAppError(error, 'Nao foi possivel cadastrar o item.')
   }
 }
 
@@ -96,15 +110,11 @@ export async function updateInventoryItem(
 
   try {
     await updateDoc(doc(db, COLLECTION, id), {
-      name: input.name.trim(),
-      sku: input.sku.trim(),
-      quantity: input.quantity,
-      unit: input.unit.trim() || 'un',
-      notes: input.notes.trim(),
+      ...toInventoryPayload(input),
       updatedAt: serverTimestamp(),
     })
   } catch (error) {
-    throw toAppError(error, 'Não foi possível atualizar o item.')
+    throw toAppError(error, 'Nao foi possivel atualizar o item.')
   }
 }
 
@@ -112,11 +122,11 @@ export async function deleteInventoryItem(id: string): Promise<void> {
   try {
     await deleteDoc(doc(db, COLLECTION, id))
   } catch (error) {
-    throw toAppError(error, 'Não foi possível excluir o item.')
+    throw toAppError(error, 'Nao foi possivel excluir o item.')
   }
 }
 
-/** Ajusta estoque por delta (negativo = saída). Impede saldo negativo. */
+/** Ajusta estoque por delta (negativo = saida). Impede saldo negativo. */
 export async function adjustInventoryQuantity(
   id: string,
   delta: number,
@@ -131,7 +141,7 @@ export async function adjustInventoryQuantity(
     if (next < 0) {
       throw new AppError(
         'validation',
-        `Estoque insuficiente para "${item.name}". Disponível: ${item.quantity} ${item.unit}.`,
+        `Estoque insuficiente para "${item.name}". Disponivel: ${item.quantity} ${item.unit}.`,
       )
     }
     await updateDoc(doc(db, COLLECTION, id), {
@@ -139,6 +149,6 @@ export async function adjustInventoryQuantity(
       updatedAt: serverTimestamp(),
     })
   } catch (error) {
-    throw toAppError(error, 'Não foi possível atualizar o estoque.')
+    throw toAppError(error, 'Nao foi possivel atualizar o estoque.')
   }
 }
