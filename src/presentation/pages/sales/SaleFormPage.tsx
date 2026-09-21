@@ -42,8 +42,10 @@ const EMPTY_FORM: SaleInput = {
   unitPrice: 0,
   deliveryFee: 0,
   paymentMethod1: 'pix',
+  paymentAmount1: 0,
   paymentFee1: 0,
   paymentMethod2: '',
+  paymentAmount2: 0,
   paymentFee2: 0,
   dueDate: addDaysInputValue(todayInputValue(), 30),
   description: '',
@@ -67,8 +69,10 @@ function toForm(sale: Sale | null): SaleInput {
     unitPrice: sale.unitPrice || sale.amount,
     deliveryFee: sale.deliveryFee,
     paymentMethod1: sale.paymentMethod1 || 'pix',
+    paymentAmount1: sale.paymentAmount1 || sale.amount,
     paymentFee1: sale.paymentFee1,
     paymentMethod2: sale.paymentMethod2,
+    paymentAmount2: sale.paymentAmount2,
     paymentFee2: sale.paymentFee2,
     dueDate: sale.dueDate || addDaysInputValue(sale.soldAt, 30),
     description: sale.description,
@@ -84,6 +88,63 @@ type SaleFormFieldsProps = {
   sellerOptions: { value: string; label: string }[]
   products: InventoryItem[]
   onSubmit: (input: SaleInput) => Promise<void>
+}
+
+type FiscalAfterSaleModalProps = {
+  open: boolean
+  busy: boolean
+  onEmitNfe: () => void
+  onEmitNfce: () => void
+  onSkip: () => void
+}
+
+function FiscalAfterSaleModal({
+  open,
+  busy,
+  onEmitNfe,
+  onEmitNfce,
+  onSkip,
+}: FiscalAfterSaleModalProps) {
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+      <div className="w-full max-w-lg rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-lg">
+        <h2 className="text-lg font-semibold text-[var(--color-text)]">
+          Venda salva
+        </h2>
+        <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+          Deseja emitir o documento fiscal agora? Se faltar configuracao fiscal, a venda permanece salva e a emissao fica pendente.
+        </p>
+        <div className="mt-5 grid gap-2 sm:grid-cols-3">
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={busy}
+            onClick={onEmitNfce}
+          >
+            Emitir NFC-e
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={busy}
+            onClick={onEmitNfe}
+          >
+            Emitir NF-e
+          </Button>
+          <Button type="button" variant="ghost" disabled={busy} onClick={onSkip}>
+            Nao emitir agora
+          </Button>
+        </div>
+        {busy ? (
+          <p className="mt-3 text-sm text-[var(--color-text-muted)]">
+            Processando emissao fiscal...
+          </p>
+        ) : null}
+      </div>
+    </div>
+  )
 }
 
 function ClientInsightPanel({ clientId }: { clientId: string }) {
@@ -248,6 +309,9 @@ function SaleFormFields({
   }, [selectedProduct, isEdit, initial.productId, initial.quantity, form.productId])
 
   const total = computeSaleAmount(form)
+  const paymentBalance = form.paymentMethod2
+    ? total - form.paymentAmount1 - form.paymentAmount2
+    : 0
 
   const fiscalReadinessIssues = useMemo(() => {
     const issues: string[] = []
@@ -293,7 +357,10 @@ function SaleFormFields({
     try {
       await onSubmit({
         ...form,
-        paymentFee2: form.paymentMethod2 ? form.paymentFee2 : 0,
+        paymentAmount1: form.paymentMethod2 ? form.paymentAmount1 : total,
+        paymentAmount2: form.paymentMethod2 ? form.paymentAmount2 : 0,
+        paymentFee1: 0,
+        paymentFee2: 0,
       })
     } catch (err) {
       setError(err instanceof AppError ? err.message : 'Não foi possível salvar a venda.')
@@ -373,7 +440,7 @@ function SaleFormFields({
             setForm((prev) => ({
               ...prev,
               productId: event.target.value,
-              unitPrice: prev.unitPrice > 0 ? prev.unitPrice : 0,
+              unitPrice: product?.defaultUnitPrice || prev.unitPrice || 0,
               description:
                 prev.description ||
                 (product ? product.name : prev.description),
@@ -424,66 +491,121 @@ function SaleFormFields({
           />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Select
-            label="Forma de pagamento 1"
-            name="paymentMethod1"
-            value={form.paymentMethod1}
-            placeholder="Selecione…"
-            options={PAYMENT_OPTIONS}
-            onChange={(event) =>
-              setForm((prev) => ({
-                ...prev,
-                paymentMethod1: event.target.value as PaymentMethod,
-              }))
-            }
-            required
-          />
-          <Input
-            label="Taxa forma 1 (R$)"
-            name="paymentFee1"
-            type="number"
-            min="0"
-            step="0.01"
-            value={form.paymentFee1 || ''}
-            onChange={(event) =>
-              setForm((prev) => ({
-                ...prev,
-                paymentFee1: Number.parseFloat(event.target.value) || 0,
-              }))
-            }
-          />
-          <Select
-            label="Forma de pagamento 2"
-            name="paymentMethod2"
-            value={form.paymentMethod2}
-            placeholder="Opcional…"
-            options={PAYMENT_OPTIONS}
-            onChange={(event) =>
-              setForm((prev) => ({
-                ...prev,
-                paymentMethod2: event.target.value as PaymentMethod,
-                paymentFee2: event.target.value ? prev.paymentFee2 : 0,
-              }))
-            }
-          />
-          <Input
-            label="Taxa forma 2 (R$)"
-            name="paymentFee2"
-            type="number"
-            min="0"
-            step="0.01"
-            value={form.paymentFee2 || ''}
-            disabled={!form.paymentMethod2}
-            onChange={(event) =>
-              setForm((prev) => ({
-                ...prev,
-                paymentFee2: Number.parseFloat(event.target.value) || 0,
-              }))
-            }
-          />
-        </div>
+        <section className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-[15px] font-semibold text-[var(--color-text)]">
+                Pagamento
+              </h2>
+              <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">
+                Escolha uma forma ou divida o total em duas.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant={form.paymentMethod2 ? 'secondary' : 'ghost'}
+              onClick={() =>
+                setForm((prev) => ({
+                  ...prev,
+                  paymentMethod2: prev.paymentMethod2 ? '' : 'dinheiro',
+                  paymentAmount1: prev.paymentMethod2
+                    ? total
+                    : prev.paymentAmount1 || total,
+                  paymentAmount2: 0,
+                  paymentFee1: 0,
+                  paymentFee2: 0,
+                }))
+              }
+            >
+              {form.paymentMethod2 ? 'Remover divisao' : 'Dividir pagamento'}
+            </Button>
+          </div>
 
+          {!form.paymentMethod2 ? (
+            <Select
+              label="Forma de pagamento"
+              name="paymentMethod1"
+              value={form.paymentMethod1}
+              placeholder="Selecione..."
+              options={PAYMENT_OPTIONS}
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  paymentMethod1: event.target.value as PaymentMethod,
+                  paymentAmount1: total,
+                  paymentAmount2: 0,
+                }))
+              }
+              required
+            />
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Select
+                label="Primeiro pagamento"
+                name="paymentMethod1"
+                value={form.paymentMethod1}
+                placeholder="Selecione..."
+                options={PAYMENT_OPTIONS}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    paymentMethod1: event.target.value as PaymentMethod,
+                  }))
+                }
+                required
+              />
+              <Input
+                label="Valor recebido (R$)"
+                name="paymentAmount1"
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.paymentAmount1 || ''}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    paymentAmount1: Number.parseFloat(event.target.value) || 0,
+                  }))
+                }
+              />
+              <Select
+                label="Segundo pagamento"
+                name="paymentMethod2"
+                value={form.paymentMethod2}
+                placeholder="Selecione..."
+                options={PAYMENT_OPTIONS}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    paymentMethod2: event.target.value as PaymentMethod,
+                  }))
+                }
+                required
+              />
+              <Input
+                label="Valor recebido (R$)"
+                name="paymentAmount2"
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.paymentAmount2 || ''}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    paymentAmount2: Number.parseFloat(event.target.value) || 0,
+                  }))
+                }
+              />
+              <div className="sm:col-span-2">
+                <Alert tone={Math.abs(paymentBalance) <= 0.01 ? 'success' : 'warning'}>
+                  {Math.abs(paymentBalance) <= 0.01
+                    ? 'Pagamentos fecham o total da venda.'
+                    : `Diferenca: ${formatCurrency(paymentBalance)}.`}
+                </Alert>
+              </div>
+            </div>
+          )}
+        </section>
         <div className="grid gap-4 sm:grid-cols-2">
           <Input
             label="Taxa de entrega (R$)"
@@ -554,11 +676,39 @@ export function SaleFormPage() {
   const { id } = useParams()
   const isEdit = Boolean(id)
   const navigate = useNavigate()
-  const { create, update } = useSaleMutations()
+  const { create, update, emitFiscalDocument } = useSaleMutations()
   const { sale, loading: saleLoading, error: saleError } = useSale(id)
   const { clients, loading: clientsLoading } = useClients()
   const { sellers, loading: sellersLoading } = useSellers()
   const { items: products, loading: productsLoading } = useInventory()
+  const [savedSaleId, setSavedSaleId] = useState<string | null>(null)
+  const [fiscalBusy, setFiscalBusy] = useState(false)
+
+  function goToSavedSale(message: string) {
+    if (!savedSaleId) return
+    void navigate(`/vendas/${savedSaleId}`, { state: { message } })
+  }
+
+  async function emitAfterSave(documentType: 'nfe' | 'nfce') {
+    if (!savedSaleId) return
+    setFiscalBusy(true)
+    try {
+      await emitFiscalDocument(savedSaleId, documentType)
+      goToSavedSale(
+        documentType === 'nfce'
+          ? 'Venda salva e NFC-e enviada para emissao.'
+          : 'Venda salva e NF-e enviada para emissao.',
+      )
+    } catch (err) {
+      const message =
+        err instanceof AppError
+          ? `Venda salva. Emissao fiscal pendente: ${err.message}`
+          : 'Venda salva. Nao foi possivel emitir o documento fiscal agora.'
+      goToSavedSale(message)
+    } finally {
+      setFiscalBusy(false)
+    }
+  }
 
   if ((isEdit && saleLoading) || clientsLoading || sellersLoading || productsLoading) {
     return <Spinner />
@@ -626,9 +776,20 @@ export function SaleFormPage() {
             void navigate(`/vendas/${id}`)
           } else {
             const createdId = await create(input)
-            void navigate(`/vendas/${createdId}`)
+            setSavedSaleId(createdId)
           }
         }}
+      />
+      <FiscalAfterSaleModal
+        open={Boolean(savedSaleId)}
+        busy={fiscalBusy}
+        onEmitNfce={() => {
+          void emitAfterSave('nfce')
+        }}
+        onEmitNfe={() => {
+          void emitAfterSave('nfe')
+        }}
+        onSkip={() => goToSavedSale('Venda salva. Documento fiscal nao emitido.')}
       />
     </div>
   )

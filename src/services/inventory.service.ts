@@ -7,6 +7,7 @@ import {
   getDocs,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   updateDoc,
 } from 'firebase/firestore'
@@ -38,10 +39,14 @@ function mapItem(id: string, data: Record<string, unknown>): InventoryItem {
     sku: requireString(data, 'sku'),
     quantity: requireNumber(data, 'quantity'),
     unit: requireString(data, 'unit') || 'un',
+    defaultUnitPrice: requireNumber(data, 'defaultUnitPrice'),
     ncm: requireString(data, 'ncm'),
-    cfop: requireString(data, 'cfop') || '5102',
-    icmsOrigin: requireString(data, 'icmsOrigin') || '0',
-    icmsSituation: requireString(data, 'icmsSituation') || '102',
+    cfop: requireString(data, 'cfop'),
+    cest: requireString(data, 'cest'),
+    icmsOrigin: requireString(data, 'icmsOrigin'),
+    icmsSituation: requireString(data, 'icmsSituation'),
+    pisSituation: requireString(data, 'pisSituation'),
+    cofinsSituation: requireString(data, 'cofinsSituation'),
     notes: requireString(data, 'notes'),
     createdAt: toIsoString(data.createdAt),
     updatedAt: toIsoString(data.updatedAt),
@@ -54,10 +59,14 @@ function toInventoryPayload(input: InventoryItemInput) {
     sku: input.sku.trim(),
     quantity: input.quantity,
     unit: input.unit.trim() || 'un',
+    defaultUnitPrice: input.defaultUnitPrice,
     ncm: input.ncm.trim(),
-    cfop: input.cfop.trim() || '5102',
-    icmsOrigin: input.icmsOrigin.trim() || '0',
-    icmsSituation: input.icmsSituation.trim() || '102',
+    cfop: input.cfop.trim(),
+    cest: input.cest.trim(),
+    icmsOrigin: input.icmsOrigin.trim(),
+    icmsSituation: input.icmsSituation.trim(),
+    pisSituation: input.pisSituation.trim(),
+    cofinsSituation: input.cofinsSituation.trim(),
     notes: input.notes.trim(),
   }
 }
@@ -136,17 +145,25 @@ export async function adjustInventoryQuantity(
   }
 
   try {
-    const item = await getInventoryItemById(id)
-    const next = item.quantity + delta
-    if (next < 0) {
-      throw new AppError(
-        'validation',
-        `Estoque insuficiente para "${item.name}". Disponivel: ${item.quantity} ${item.unit}.`,
-      )
-    }
-    await updateDoc(doc(db, COLLECTION, id), {
-      quantity: next,
-      updatedAt: serverTimestamp(),
+    const itemRef = doc(db, COLLECTION, id)
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(itemRef)
+      if (!snapshot.exists()) {
+        throw new AppError('not_found', 'Item de estoque nao encontrado.')
+      }
+
+      const item = mapItem(snapshot.id, snapshot.data())
+      const next = item.quantity + delta
+      if (next < 0) {
+        throw new AppError(
+          'validation',
+          `Estoque insuficiente para "${item.name}". Disponivel: ${item.quantity} ${item.unit}.`,
+        )
+      }
+      transaction.update(itemRef, {
+        quantity: next,
+        updatedAt: serverTimestamp(),
+      })
     })
   } catch (error) {
     throw toAppError(error, 'Nao foi possivel atualizar o estoque.')

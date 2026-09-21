@@ -3,6 +3,7 @@ import type {
   AccountReceivable,
   AccountReceivableInput,
   FinancialStatus,
+  ReceivablePaymentInput,
 } from '@/domain/types'
 import { AppError } from '@/lib/errors'
 import * as accountsReceivableService from '@/services/accountsReceivable.service'
@@ -20,7 +21,11 @@ export function useAccountReceivableMutations() {
     await accountsReceivableService.deleteAccountReceivable(id)
   }, [])
 
-  return { create, update, remove }
+  const pay = useCallback(async (id: string, input: ReceivablePaymentInput) => {
+    await accountsReceivableService.payAccountReceivable(id, input)
+  }, [])
+
+  return { create, update, remove, pay }
 }
 
 export function useAccountsReceivable(
@@ -81,7 +86,15 @@ export function useAccountsReceivable(
     [mutations, refresh],
   )
 
-  return { accounts, loading, error, refresh, create, update, remove }
+  const pay = useCallback(
+    async (id: string, input: ReceivablePaymentInput) => {
+      await mutations.pay(id, input)
+      await refresh()
+    },
+    [mutations, refresh],
+  )
+
+  return { accounts, loading, error, refresh, create, update, remove, pay }
 }
 
 export function useAccountReceivable(id: string | undefined) {

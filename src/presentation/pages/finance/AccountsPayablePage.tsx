@@ -13,10 +13,6 @@ import { DataTable } from '@/presentation/components/ui/DataTable'
 import { PageHeader } from '@/presentation/components/ui/PageHeader'
 import { Select } from '@/presentation/components/ui/Select'
 import { Spinner } from '@/presentation/components/ui/Spinner'
-import {
-  StatusBadge,
-  financialStatusTone,
-} from '@/presentation/components/ui/StatusBadge'
 
 const STATUS_FILTER_OPTIONS = [
   { value: 'all', label: 'Todos' },
@@ -28,9 +24,11 @@ const STATUS_FILTER_OPTIONS = [
 export function AccountsPayablePage() {
   const [statusFilter, setStatusFilter] =
     useUrlSyncedState<FinancialStatus | 'all'>('status', 'all')
-  const { accounts, loading, error, remove } = useAccountsPayable(statusFilter)
+  const { accounts, loading, error, remove, updateStatus } =
+    useAccountsPayable(statusFilter)
   const [pendingDelete, setPendingDelete] = useState<AccountPayable | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null)
 
   const rows = useMemo(() => accounts, [accounts])
 
@@ -42,6 +40,16 @@ export function AccountsPayablePage() {
       setPendingDelete(null)
     } finally {
       setDeleting(false)
+    }
+  }
+
+  async function handleStatusChange(row: AccountPayable, status: FinancialStatus) {
+    if (row.status === status) return
+    setUpdatingStatusId(row.id)
+    try {
+      await updateStatus(row.id, status)
+    } finally {
+      setUpdatingStatusId(null)
     }
   }
 
@@ -114,14 +122,32 @@ export function AccountsPayablePage() {
               render: (row) => {
                 const overdue = isOverdue(row.dueDate, row.status)
                 return (
-                  <StatusBadge
-                    label={
-                      overdue
-                        ? 'Pendente (vencida)'
-                        : FINANCIAL_STATUS_LABELS[row.status]
+                  <select
+                    aria-label={`Status de ${row.description}`}
+                    name={`status-${row.id}`}
+                    value={row.status}
+                    disabled={updatingStatusId === row.id}
+                    title={
+                      overdue ? 'Conta pendente vencida' : FINANCIAL_STATUS_LABELS[row.status]
                     }
-                    tone={financialStatusTone(row.status, overdue)}
-                  />
+                    className={`min-w-36 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-[14px] outline-none focus-visible:border-[var(--color-primary)] focus-visible:shadow-[var(--focus-ring)] disabled:opacity-60 ${
+                      overdue ? 'border-[var(--color-danger)] text-[var(--color-danger)]' : ''
+                    }`}
+                    onChange={(event) => {
+                      void handleStatusChange(
+                        row,
+                        event.target.value as FinancialStatus,
+                      )
+                    }}
+                  >
+                    {STATUS_FILTER_OPTIONS.filter((option) => option.value !== 'all').map(
+                      (option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ),
+                    )}
+                  </select>
                 )
               },
             },

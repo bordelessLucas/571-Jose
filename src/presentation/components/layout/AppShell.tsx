@@ -1,9 +1,10 @@
+import { House } from '@phosphor-icons/react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '@/hooks/AuthProvider'
 import { Sidebar } from '@/presentation/components/layout/Sidebar'
+import { AppSplash } from '@/presentation/components/ui/AppSplash'
 import { Button } from '@/presentation/components/ui/Button'
-import { Spinner } from '@/presentation/components/ui/Spinner'
 
 const SIDEBAR_KEY = 'jose.sidebar.collapsed'
 
@@ -11,11 +12,7 @@ export function ProtectedRoute({ children }: { children?: ReactNode }) {
   const { user, loading } = useAuth()
 
   if (loading) {
-    return (
-      <div className="flex min-h-svh items-center justify-center">
-        <Spinner label="Verificando sessão…" />
-      </div>
-    )
+    return <AppSplash label="Verificando sessao..." />
   }
 
   if (!user) {
@@ -53,7 +50,7 @@ export function AppShell() {
   return (
     <div className="flex min-h-svh flex-col md:flex-row">
       <a href="#main-content" className="skip-link">
-        Ir para o conteúdo
+        Ir para o conteudo
       </a>
       <Sidebar
         userEmail={user.email}
@@ -65,7 +62,7 @@ export function AppShell() {
         onToggle={() => setCollapsed((value) => !value)}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 px-4 py-2 backdrop-blur-sm md:px-6">
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]/90 px-4 py-2 shadow-[0_10px_30px_rgb(15_76_92_/_0.05)] backdrop-blur-sm md:px-6">
           <div className="flex items-center gap-2">
             <Button
               type="button"
@@ -82,6 +79,7 @@ export function AppShell() {
               className="rounded-[var(--radius-md)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"
             >
               <Button type="button" variant="secondary">
+                <House size={16} weight="duotone" aria-hidden />
                 Ir ao painel
               </Button>
             </Link>
@@ -90,7 +88,11 @@ export function AppShell() {
             {user.email}
           </p>
         </div>
-        <main id="main-content" tabIndex={-1} className="flex-1 scroll-mt-4 p-5 md:p-6">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="app-enter flex-1 scroll-mt-4 p-5 md:p-6"
+        >
           <Outlet />
         </main>
       </div>

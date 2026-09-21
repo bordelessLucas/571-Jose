@@ -42,6 +42,7 @@ export type ClientInput = {
 export type PaymentMethod =
   | 'dinheiro'
   | 'pix'
+  | 'fiado'
   | 'cartao_credito'
   | 'cartao_debito'
   | 'boleto'
@@ -66,18 +67,26 @@ export type SellerInput = {
   active: boolean
 }
 
-/** NF-e via Focus NFe (NFS-e fora do escopo atual). */
-export type FiscalDocumentType = 'nfe'
+/** NF-e/NFC-e via Focus NFe (NFS-e fora do escopo atual). */
+export type FiscalDocumentType = 'nfe' | 'nfce'
 
 export type FiscalDocumentStatus =
   | 'draft'
-  | 'queued'
+  | 'fiscal_configuration_incomplete'
+  | 'processing'
   | 'authorized'
   | 'rejected'
   | 'cancelled'
   | 'error'
 
-export type FiscalProviderMode = 'mock' | 'live'
+export type FiscalProviderMode = 'live'
+
+export type DeliveryStatus =
+  | 'pending'
+  | 'assigned'
+  | 'out_for_delivery'
+  | 'delivered'
+  | 'cancelled'
 
 export type Sale = {
   id: string
@@ -91,10 +100,16 @@ export type Sale = {
   productName: string
   quantity: number
   unitPrice: number
+  originalUnitPrice: number
+  finalUnitPrice: number
+  priceChanged: boolean
+  priceChangedBy: string | null
   deliveryFee: number
   paymentMethod1: PaymentMethod
+  paymentAmount1: number
   paymentFee1: number
   paymentMethod2: PaymentMethod
+  paymentAmount2: number
   paymentFee2: number
   dueDate: string
   amount: number
@@ -104,6 +119,12 @@ export type Sale = {
   fiscalDocumentId: string | null
   fiscalStatus: FiscalDocumentStatus | null
   fiscalRef: string | null
+  deliveryPersonId: string | null
+  deliveryPersonName: string | null
+  deliveryStatus: DeliveryStatus
+  deliveryAssignedAt: string | null
+  deliveryOutAt: string | null
+  deliveredAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -116,8 +137,10 @@ export type SaleInput = {
   unitPrice: number
   deliveryFee: number
   paymentMethod1: PaymentMethod
+  paymentAmount1: number
   paymentFee1: number
   paymentMethod2: PaymentMethod
+  paymentAmount2: number
   paymentFee2: number
   dueDate: string
   description: string
@@ -171,6 +194,14 @@ export type AccountReceivable = {
   id: string
   description: string
   amount: number
+  originalAmount: number
+  balance: number
+  discountAmount: number
+  paidAmount: number
+  finalAmount: number
+  discountReason: string
+  discountedBy: string | null
+  paidAt: string | null
   dueDate: string
   status: FinancialStatus
   clientId: string
@@ -188,6 +219,13 @@ export type AccountReceivableInput = {
   clientId: string
   clientName: string
   saleId: string | null
+}
+
+export type ReceivablePaymentInput = {
+  paidAmount: number
+  discountAmount: number
+  discountReason: string
+  paidBy?: string | null
 }
 
 export type CashMovementType = 'entrada' | 'saida'
@@ -222,10 +260,14 @@ export type InventoryItem = {
   sku: string
   quantity: number
   unit: string
+  defaultUnitPrice: number
   ncm: string
   cfop: string
+  cest: string
   icmsOrigin: string
   icmsSituation: string
+  pisSituation: string
+  cofinsSituation: string
   notes: string
   createdAt: string
   updatedAt: string
@@ -236,10 +278,14 @@ export type InventoryItemInput = {
   sku: string
   quantity: number
   unit: string
+  defaultUnitPrice: number
   ncm: string
   cfop: string
+  cest: string
   icmsOrigin: string
   icmsSituation: string
+  pisSituation: string
+  cofinsSituation: string
   notes: string
 }
 
@@ -289,8 +335,11 @@ export type FiscalInvoiceRequest = {
   productUnit?: string
   productNcm?: string
   productCfop?: string
+  productCest?: string
   productIcmsOrigin?: string
   productIcmsSituation?: string
+  productPisSituation?: string
+  productCofinsSituation?: string
   /** Quando true, gera nova ref Focus e cancela docs ativos anteriores. */
   reissue?: boolean
 }
@@ -304,6 +353,17 @@ export type FiscalInvoiceResult = {
   focusRef: string
   providerMode: FiscalProviderMode
   rawResponse?: unknown
+  number?: string | null
+  series?: string | null
+  accessKey?: string | null
+  sefazStatus?: string | null
+  xmlUrl?: string | null
+  pdfUrl?: string | null
+  qrCodeUrl?: string | null
+  issuedAt?: string | null
+  cancelledAt?: string | null
+  isSimulated?: false
+  environment?: 'homologation' | 'production'
 }
 
 export type FiscalDocument = {
@@ -314,20 +374,32 @@ export type FiscalDocument = {
   documentType: FiscalDocumentType
   status: FiscalDocumentStatus
   providerMode: FiscalProviderMode
+  environment: 'homologation' | 'production'
+  isSimulated: boolean
   amount: number
   description: string
   recipientName: string
   recipientDocument: string
   externalId: string | null
   protocol: string | null
+  number: string | null
+  series: string | null
+  accessKey: string | null
+  sefazStatus: string | null
+  xmlUrl: string | null
+  pdfUrl: string | null
+  qrCodeUrl: string | null
   message: string
+  issuedAt: string | null
+  cancelledAt: string | null
   createdAt: string
   updatedAt: string
 }
 
 export const FISCAL_STATUS_LABELS: Record<FiscalDocumentStatus, string> = {
   draft: 'Rascunho',
-  queued: 'Em processamento',
+  fiscal_configuration_incomplete: 'Configuracao fiscal incompleta',
+  processing: 'Em processamento',
   authorized: 'Autorizada',
   rejected: 'Rejeitada',
   cancelled: 'Cancelada',
@@ -351,6 +423,7 @@ export const FINANCIAL_STATUS_LABELS: Record<FinancialStatus, string> = {
 export const PAYMENT_METHOD_LABELS: Record<Exclude<PaymentMethod, ''>, string> = {
   dinheiro: 'Dinheiro',
   pix: 'PIX',
+  fiado: 'Fiado',
   cartao_credito: 'Cartão de crédito',
   cartao_debito: 'Cartão de débito',
   boleto: 'Boleto',
@@ -369,4 +442,12 @@ export type ClientCommercialInsight = {
 export const CASH_MOVEMENT_TYPE_LABELS: Record<CashMovementType, string> = {
   entrada: 'Entrada',
   saida: 'Saída',
+}
+
+export const DELIVERY_STATUS_LABELS: Record<DeliveryStatus, string> = {
+  pending: 'Aguardando',
+  assigned: 'Atribuida',
+  out_for_delivery: 'Saiu para entrega',
+  delivered: 'Entregue',
+  cancelled: 'Cancelada',
 }

@@ -8,8 +8,8 @@
     ],
     "rewrites": [
       {
-        "source": "/api/focus/nfe",
-        "function": "emitNfe"
+        "source": "/api/focus/emit",
+        "function": "focusFiscal"
       },
       {
         "source": "**",

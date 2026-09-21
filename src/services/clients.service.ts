@@ -30,6 +30,39 @@ function validateInput(input: ClientInput): void {
   }
 }
 
+function onlyDigits(value: string): string {
+  return value.replace(/\D/g, '')
+}
+
+function normalizeName(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+async function assertNoDuplicateClient(input: ClientInput, ignoreId?: string): Promise<void> {
+  const clients = await listClients()
+  const document = onlyDigits(input.document)
+  const phone = onlyDigits(input.phone)
+  const name = normalizeName(input.name)
+
+  const duplicate = clients.find((client) => {
+    if (ignoreId && client.id === ignoreId) return false
+    const clientDocument = onlyDigits(client.document)
+    const clientPhone = onlyDigits(client.phone)
+    const clientName = normalizeName(client.name)
+
+    if (document && clientDocument && document === clientDocument) return true
+    if (phone && clientPhone && phone === clientPhone) return true
+    return Boolean(name && phone && clientName === name && clientPhone === phone)
+  })
+
+  if (duplicate) {
+    throw new AppError(
+      'validation',
+      `Possivel cliente duplicado: ${duplicate.name}. Revise CPF/CNPJ ou telefone.`,
+    )
+  }
+}
+
 function mapClient(id: string, data: Record<string, unknown>): Client {
   return {
     id,
@@ -94,6 +127,7 @@ export async function getClientById(id: string): Promise<Client> {
 
 export async function createClient(input: ClientInput): Promise<string> {
   validateInput(input)
+  await assertNoDuplicateClient(input)
 
   try {
     const ref = await addDoc(collection(db, COLLECTION), {
@@ -109,6 +143,7 @@ export async function createClient(input: ClientInput): Promise<string> {
 
 export async function updateClient(id: string, input: ClientInput): Promise<void> {
   validateInput(input)
+  await assertNoDuplicateClient(input, id)
 
   try {
     await updateDoc(doc(db, COLLECTION, id), {

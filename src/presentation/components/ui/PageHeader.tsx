@@ -1,14 +1,13 @@
+import { ArrowLeft, House } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
-import { Button } from '@/presentation/components/ui/Button'
 import { useSmartBack } from '@/hooks/useSmartBack'
+import { Button } from '@/presentation/components/ui/Button'
 
 type PageHeaderProps = {
   title: string
   description?: string
   actions?: ReactNode
-  /** Rota fallback quando não há histórico (ex.: /clientes). */
   backTo?: string
-  /** Exibe botão para o painel. Default: true quando backTo existe. */
   showDashboard?: boolean
   meta?: ReactNode
 }
@@ -31,11 +30,13 @@ export function PageHeader({
         <div className="flex flex-wrap items-center gap-2">
           {backTo ? (
             <Button type="button" variant="ghost" onClick={goBack}>
-              ← Voltar
+              <ArrowLeft size={16} weight="duotone" aria-hidden />
+              Voltar
             </Button>
           ) : null}
           {shouldShowDashboard ? (
             <Button type="button" variant="secondary" onClick={goDashboard}>
+              <House size={16} weight="duotone" aria-hidden />
               Painel
             </Button>
           ) : null}
@@ -44,11 +45,11 @@ export function PageHeader({
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-[var(--color-text)] text-balance">
+          <h1 className="text-2xl font-semibold leading-tight text-[var(--color-text)] text-balance">
             {title}
           </h1>
           {description ? (
-            <p className="mt-1 max-w-2xl text-sm text-[var(--color-text-muted)]">
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--color-text-muted)]">
               {description}
             </p>
           ) : null}

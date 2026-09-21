@@ -8,7 +8,6 @@ import { Alert } from '@/presentation/components/ui/Alert'
 import { Button } from '@/presentation/components/ui/Button'
 import { Input } from '@/presentation/components/ui/Input'
 import { PageHeader } from '@/presentation/components/ui/PageHeader'
-import { Select } from '@/presentation/components/ui/Select'
 import { Spinner } from '@/presentation/components/ui/Spinner'
 import { TextArea } from '@/presentation/components/ui/TextArea'
 
@@ -17,10 +16,14 @@ const EMPTY_FORM: InventoryItemInput = {
   sku: '',
   quantity: 0,
   unit: 'UN',
+  defaultUnitPrice: 0,
   ncm: '',
-  cfop: '5102',
-  icmsOrigin: '0',
-  icmsSituation: '102',
+  cfop: '',
+  cest: '',
+  icmsOrigin: '',
+  icmsSituation: '',
+  pisSituation: '',
+  cofinsSituation: '',
   notes: '',
 }
 
@@ -31,10 +34,14 @@ function toForm(item: InventoryItem | null): InventoryItemInput {
     sku: item.sku,
     quantity: item.quantity,
     unit: item.unit,
+    defaultUnitPrice: item.defaultUnitPrice,
     ncm: item.ncm,
     cfop: item.cfop,
+    cest: item.cest,
     icmsOrigin: item.icmsOrigin,
     icmsSituation: item.icmsSituation,
+    pisSituation: item.pisSituation,
+    cofinsSituation: item.cofinsSituation,
     notes: item.notes,
   }
 }
@@ -109,6 +116,20 @@ function FormFields({ initial, isEdit, onSubmit }: FormFieldsProps) {
             setForm((prev) => ({ ...prev, unit: event.target.value.toUpperCase() }))
           }
         />
+        <Input
+          label="Preco padrao (R$)"
+          name="defaultUnitPrice"
+          type="number"
+          min="0"
+          step="0.01"
+          value={form.defaultUnitPrice || ''}
+          onChange={(event) =>
+            setForm((prev) => ({
+              ...prev,
+              defaultUnitPrice: Number.parseFloat(event.target.value) || 0,
+            }))
+          }
+        />
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <Input
@@ -123,17 +144,18 @@ function FormFields({ initial, isEdit, onSubmit }: FormFieldsProps) {
           value={form.cfop}
           onChange={(event) => setForm((prev) => ({ ...prev, cfop: event.target.value }))}
         />
+        <Input
+          label="CEST"
+          name="cest"
+          value={form.cest}
+          onChange={(event) => setForm((prev) => ({ ...prev, cest: event.target.value }))}
+        />
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        <Select
+        <Input
           label="Origem ICMS"
           name="icmsOrigin"
           value={form.icmsOrigin}
-          options={[
-            { value: '0', label: '0 - Nacional' },
-            { value: '1', label: '1 - Estrangeira importacao direta' },
-            { value: '2', label: '2 - Estrangeira mercado interno' },
-          ]}
           onChange={(event) =>
             setForm((prev) => ({ ...prev, icmsOrigin: event.target.value }))
           }
@@ -144,6 +166,24 @@ function FormFields({ initial, isEdit, onSubmit }: FormFieldsProps) {
           value={form.icmsSituation}
           onChange={(event) =>
             setForm((prev) => ({ ...prev, icmsSituation: event.target.value }))
+          }
+        />
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Input
+          label="CST PIS"
+          name="pisSituation"
+          value={form.pisSituation}
+          onChange={(event) =>
+            setForm((prev) => ({ ...prev, pisSituation: event.target.value }))
+          }
+        />
+        <Input
+          label="CST COFINS"
+          name="cofinsSituation"
+          value={form.cofinsSituation}
+          onChange={(event) =>
+            setForm((prev) => ({ ...prev, cofinsSituation: event.target.value }))
           }
         />
       </div>

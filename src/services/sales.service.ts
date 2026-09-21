@@ -14,6 +14,8 @@ import {
 import type {
   Client,
   ClientCommercialInsight,
+  DeliveryStatus,
+  FiscalDocumentType,
   PaymentMethod,
   Sale,
   SaleInput,
@@ -21,20 +23,33 @@ import type {
 import { AppError, toAppError } from '@/lib/errors'
 import { addDaysInputValue, computeSaleAmount, todayInputValue } from '@/lib/format'
 import {
+  addSaleToPaymentTotals,
+  emptySalePaymentTotals,
+} from '@/lib/salePaymentTotals'
+import {
   createAccountReceivable,
   findAccountReceivableBySaleId,
   listAccountsReceivableByClientId,
   updateAccountReceivable,
 } from '@/services/accountsReceivable.service'
+import { createCashMovement } from '@/services/cash.service'
 import { getClientById } from '@/services/clients.service'
 import { prepareFiscalEmission } from '@/services/fiscal.service'
 import {
+  cancelFiscalDocument,
+  consultFiscalDocument,
+} from '@/services/fiscal.service'
+import {
   cancelActiveFiscalDocumentsForSale,
   createFiscalDocument,
+  findActiveFiscalDocumentForSale,
+  getFiscalDocumentById,
+  updateFiscalDocumentFromResult,
 } from '@/services/fiscalDocuments.service'
 import { db } from '@/services/firebase'
 import {
   mapDocId,
+  requireBoolean,
   requireNumber,
   requireString,
   toIsoString,
@@ -50,6 +65,7 @@ const COLLECTION = 'sales'
 const VALID_PAYMENT: PaymentMethod[] = [
   'dinheiro',
   'pix',
+  'fiado',
   'cartao_credito',
   'cartao_debito',
   'boleto',
@@ -60,6 +76,22 @@ const VALID_PAYMENT: PaymentMethod[] = [
 
 function isPaymentMethod(value: string): value is PaymentMethod {
   return VALID_PAYMENT.includes(value as PaymentMethod)
+}
+
+function saleHasCredit(input: Pick<SaleInput, 'paymentMethod1' | 'paymentMethod2'>): boolean {
+  return input.paymentMethod1 === 'fiado' || input.paymentMethod2 === 'fiado'
+}
+
+function paymentAmounts(input: SaleInput): { paymentAmount1: number; paymentAmount2: number } {
+  const total = computeSaleAmount(input)
+  if (!input.paymentMethod2) {
+    return { paymentAmount1: total, paymentAmount2: 0 }
+  }
+
+  return {
+    paymentAmount1: Math.max(0, input.paymentAmount1),
+    paymentAmount2: Math.max(0, input.paymentAmount2),
+  }
 }
 
 function validateInput(input: SaleInput): void {
@@ -96,6 +128,23 @@ function validateInput(input: SaleInput): void {
   if (!(computeSaleAmount(input) > 0)) {
     throw new AppError('validation', 'O total da venda deve ser maior que zero.')
   }
+
+  if (input.paymentMethod2) {
+    const total = computeSaleAmount(input)
+    const amounts = paymentAmounts(input)
+    if (!(amounts.paymentAmount1 > 0) || !(amounts.paymentAmount2 > 0)) {
+      throw new AppError(
+        'validation',
+        'Informe os valores das duas formas de pagamento.',
+      )
+    }
+    if (Math.abs(amounts.paymentAmount1 + amounts.paymentAmount2 - total) > 0.01) {
+      throw new AppError(
+        'validation',
+        'A soma das formas de pagamento deve fechar o total da venda.',
+      )
+    }
+  }
 }
 
 function mapSale(id: string, data: Record<string, unknown>): Sale {
@@ -115,14 +164,28 @@ function mapSale(id: string, data: Record<string, unknown>): Sale {
     productName: requireString(data, 'productName'),
     quantity: requireNumber(data, 'quantity') || 1,
     unitPrice: requireNumber(data, 'unitPrice') || requireNumber(data, 'amount'),
+    originalUnitPrice:
+      requireNumber(data, 'originalUnitPrice') ||
+      requireNumber(data, 'unitPrice') ||
+      requireNumber(data, 'amount'),
+    finalUnitPrice:
+      requireNumber(data, 'finalUnitPrice') ||
+      requireNumber(data, 'unitPrice') ||
+      requireNumber(data, 'amount'),
+    priceChanged: requireBoolean(data, 'priceChanged', false),
+    priceChangedBy: requireString(data, 'priceChangedBy') || null,
     deliveryFee: requireNumber(data, 'deliveryFee'),
     paymentMethod1: isPaymentMethod(paymentMethod1Raw)
       ? paymentMethod1Raw
       : '',
+    paymentAmount1:
+      requireNumber(data, 'paymentAmount1') ||
+      (paymentMethod2Raw ? 0 : requireNumber(data, 'amount')),
     paymentFee1: requireNumber(data, 'paymentFee1'),
     paymentMethod2: isPaymentMethod(paymentMethod2Raw)
       ? paymentMethod2Raw
       : '',
+    paymentAmount2: requireNumber(data, 'paymentAmount2'),
     paymentFee2: requireNumber(data, 'paymentFee2'),
     dueDate:
       requireString(data, 'dueDate') ||
@@ -136,6 +199,13 @@ function mapSale(id: string, data: Record<string, unknown>): Sale {
       ? (fiscalStatusRaw as Sale['fiscalStatus'])
       : null,
     fiscalRef: requireString(data, 'fiscalRef') || null,
+    deliveryPersonId: requireString(data, 'deliveryPersonId') || null,
+    deliveryPersonName: requireString(data, 'deliveryPersonName') || null,
+    deliveryStatus:
+      (requireString(data, 'deliveryStatus') as Sale['deliveryStatus']) || 'pending',
+    deliveryAssignedAt: toIsoString(data.deliveryAssignedAt) || null,
+    deliveryOutAt: toIsoString(data.deliveryOutAt) || null,
+    deliveredAt: toIsoString(data.deliveredAt) || null,
     createdAt: toIsoString(data.createdAt),
     updatedAt: toIsoString(data.updatedAt),
   }
@@ -152,11 +222,15 @@ async function resolveSaleRelations(input: SaleInput): Promise<{
   sellerName: string
   productName: string
   productUnit: string
+  productDefaultUnitPrice: number
   productSku: string
   productNcm: string
   productCfop: string
+  productCest: string
   productIcmsOrigin: string
   productIcmsSituation: string
+  productPisSituation: string
+  productCofinsSituation: string
   stockQuantity: number
   amount: number
 }> {
@@ -175,11 +249,15 @@ async function resolveSaleRelations(input: SaleInput): Promise<{
     sellerName: seller.name,
     productName: product.name,
     productUnit: product.unit,
+    productDefaultUnitPrice: product.defaultUnitPrice,
     productSku: product.sku,
     productNcm: product.ncm,
     productCfop: product.cfop,
+    productCest: product.cest,
     productIcmsOrigin: product.icmsOrigin,
     productIcmsSituation: product.icmsSituation,
+    productPisSituation: product.pisSituation,
+    productCofinsSituation: product.cofinsSituation,
     stockQuantity: product.quantity,
     amount: computeSaleAmount(input),
   }
@@ -255,13 +333,42 @@ async function upsertReceivableForSale(
   return createAccountReceivable(payload)
 }
 
+async function syncFinancialOnCreate(
+  saleId: string,
+  input: SaleInput,
+  client: Client,
+  amount: number,
+  productName: string,
+): Promise<string | null> {
+  if (saleHasCredit(input)) {
+    return upsertReceivableForSale(
+      saleId,
+      input,
+      client,
+      amount,
+      productName,
+      null,
+    )
+  }
+
+  await createCashMovement({
+    type: 'entrada',
+    description: `Venda - ${client.name} - ${productName}`,
+    amount,
+    movementDate: input.soldAt,
+  })
+
+  return null
+}
+
 /**
- * Emissão automática de NF-e ao fechar a venda (Focus NFe mock/live).
+ * Emissao automatica de documento fiscal ao fechar a venda via Focus NFe.
  * Falha fiscal NÃO desfaz a venda — grava status na venda e em fiscalDocuments.
  * Em reemissão: cancela documentos ativos anteriores e usa nova ref Focus.
  */
-async function emitNfeForSale(
+async function emitFiscalForSale(
   saleId: string,
+  documentType: FiscalDocumentType,
   amount: number,
   description: string,
   soldAt: string,
@@ -271,12 +378,25 @@ async function emitNfeForSale(
     unit: string
     ncm: string
     cfop: string
+    cest: string
     icmsOrigin: string
     icmsSituation: string
+    pisSituation: string
+    cofinsSituation: string
   },
   options: { reissue?: boolean } = {},
 ) {
   const reissue = Boolean(options.reissue)
+
+  if (!reissue) {
+    const active = await findActiveFiscalDocumentForSale(saleId, documentType)
+    if (active) {
+      throw new AppError(
+        'validation',
+        'Ja existe documento fiscal ativo para esta venda. Consulte ou cancele antes de emitir novamente.',
+      )
+    }
+  }
 
   if (reissue) {
     await cancelActiveFiscalDocumentsForSale(
@@ -285,41 +405,55 @@ async function emitNfeForSale(
     )
   }
 
+  const fallbackRef = `sale-${documentType}-${saleId}`
   const result = await prepareFiscalEmission({
-    referenceType: 'sale',
-    referenceId: saleId,
-    documentType: 'nfe',
-    amount,
-    description,
-    soldAt,
-    recipientName: client.name,
-    recipientDocument: client.document || '00000000000',
-    recipientEmail: client.email,
-    recipientPhone: client.phone,
-    recipientAddress: client.address,
-    recipientAddressNumber: client.addressNumber,
-    recipientDistrict: client.district,
-    recipientCity: client.city,
-    recipientState: client.state,
-    recipientZipCode: client.zipCode,
-    recipientStateRegistration: client.stateRegistration,
-    recipientStateRegistrationIndicator: client.stateRegistrationIndicator,
-    productCode: fiscalProduct.sku || saleId.slice(0, 12),
-    productUnit: fiscalProduct.unit,
-    productNcm: fiscalProduct.ncm,
-    productCfop: fiscalProduct.cfop,
-    productIcmsOrigin: fiscalProduct.icmsOrigin,
-    productIcmsSituation: fiscalProduct.icmsSituation,
-    reissue,
-  })
+      referenceType: 'sale',
+      referenceId: saleId,
+      documentType,
+      amount,
+      description,
+      soldAt,
+      recipientName: client.name,
+      recipientDocument: client.document,
+      recipientEmail: client.email,
+      recipientPhone: client.phone,
+      recipientAddress: client.address,
+      recipientAddressNumber: client.addressNumber,
+      recipientDistrict: client.district,
+      recipientCity: client.city,
+      recipientState: client.state,
+      recipientZipCode: client.zipCode,
+      recipientStateRegistration: client.stateRegistration,
+      recipientStateRegistrationIndicator: client.stateRegistrationIndicator,
+      productCode: fiscalProduct.sku || saleId.slice(0, 12),
+      productUnit: fiscalProduct.unit,
+      productNcm: fiscalProduct.ncm,
+      productCfop: fiscalProduct.cfop,
+      productCest: fiscalProduct.cest,
+      productIcmsOrigin: fiscalProduct.icmsOrigin,
+      productIcmsSituation: fiscalProduct.icmsSituation,
+      productPisSituation: fiscalProduct.pisSituation,
+      productCofinsSituation: fiscalProduct.cofinsSituation,
+      reissue,
+    }).catch(async (error: unknown) => {
+      if (error instanceof AppError && error.code === 'validation') {
+        await updateDoc(doc(db, COLLECTION, saleId), {
+          fiscalStatus: 'fiscal_configuration_incomplete',
+          fiscalRef: fallbackRef,
+          updatedAt: serverTimestamp(),
+        })
+      }
+      throw error
+    })
 
   const fiscalDocumentId = await createFiscalDocument({
     result,
     referenceId: saleId,
+    documentType,
     amount,
     description,
     recipientName: client.name,
-    recipientDocument: client.document || '00000000000',
+    recipientDocument: client.document,
   })
 
   await updateDoc(doc(db, COLLECTION, saleId), {
@@ -337,6 +471,7 @@ function toSalePayload(
   relations: Awaited<ReturnType<typeof resolveSaleRelations>>,
 ) {
   const description = buildDescription(input, relations.productName)
+  const amounts = paymentAmounts(input)
   return {
     clientId: input.clientId,
     clientName: relations.client.name,
@@ -348,10 +483,18 @@ function toSalePayload(
     productName: relations.productName,
     quantity: input.quantity,
     unitPrice: input.unitPrice,
+    originalUnitPrice: relations.productDefaultUnitPrice || input.unitPrice,
+    finalUnitPrice: input.unitPrice,
+    priceChanged:
+      relations.productDefaultUnitPrice > 0 &&
+      relations.productDefaultUnitPrice !== input.unitPrice,
+    priceChangedBy: null,
     deliveryFee: input.deliveryFee,
     paymentMethod1: input.paymentMethod1,
+    paymentAmount1: amounts.paymentAmount1,
     paymentFee1: input.paymentFee1,
     paymentMethod2: input.paymentMethod2 || '',
+    paymentAmount2: input.paymentMethod2 ? amounts.paymentAmount2 : 0,
     paymentFee2: input.paymentMethod2 ? input.paymentFee2 : 0,
     dueDate: input.dueDate,
     amount: relations.amount,
@@ -450,18 +593,23 @@ export async function createSale(input: SaleInput): Promise<string> {
       fiscalDocumentId: null,
       fiscalStatus: null,
       fiscalRef: null,
+      deliveryPersonId: null,
+      deliveryPersonName: null,
+      deliveryStatus: 'pending',
+      deliveryAssignedAt: null,
+      deliveryOutAt: null,
+      deliveredAt: null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })
 
     try {
-      const receivableId = await upsertReceivableForSale(
+      const receivableId = await syncFinancialOnCreate(
         ref.id,
         input,
         relations.client,
         relations.amount,
         relations.productName,
-        null,
       )
       await updateDoc(doc(db, COLLECTION, ref.id), {
         receivableId,
@@ -469,31 +617,6 @@ export async function createSale(input: SaleInput): Promise<string> {
       })
     } catch (receivableError) {
       console.error('Falha ao gerar conta a receber da venda:', receivableError)
-    }
-
-    try {
-      await emitNfeForSale(
-        ref.id,
-        relations.amount,
-        payload.description,
-        input.soldAt,
-        relations.client,
-        {
-          sku: relations.productSku,
-          unit: relations.productUnit,
-          ncm: relations.productNcm,
-          cfop: relations.productCfop,
-          icmsOrigin: relations.productIcmsOrigin,
-          icmsSituation: relations.productIcmsSituation,
-        },
-      )
-    } catch (fiscalError) {
-      await updateDoc(doc(db, COLLECTION, ref.id), {
-        fiscalStatus: 'error',
-        fiscalRef: `sale-${ref.id}`,
-        updatedAt: serverTimestamp(),
-      })
-      console.error('Falha na emissão automática de NF-e:', fiscalError)
     }
 
     return ref.id
@@ -524,14 +647,30 @@ export async function updateSale(id: string, input: SaleInput): Promise<void> {
 
     let receivableId = previous.receivableId
     try {
-      receivableId = await upsertReceivableForSale(
-        id,
-        input,
-        relations.client,
-        relations.amount,
-        relations.productName,
-        previous.receivableId,
-      )
+      if (saleHasCredit(input)) {
+        receivableId = await upsertReceivableForSale(
+          id,
+          input,
+          relations.client,
+          relations.amount,
+          relations.productName,
+          previous.receivableId,
+        )
+      } else {
+        const linked = await findAccountReceivableBySaleId(id)
+        if (linked && linked.status === 'pendente') {
+          await updateAccountReceivable(linked.id, {
+            description: linked.description,
+            amount: linked.amount,
+            dueDate: linked.dueDate,
+            status: 'cancelado',
+            clientId: linked.clientId,
+            clientName: linked.clientName,
+            saleId: linked.saleId,
+          })
+        }
+        receivableId = null
+      }
     } catch (receivableError) {
       console.error('Falha ao sincronizar conta a receber:', receivableError)
     }
@@ -571,14 +710,18 @@ export async function deleteSale(id: string): Promise<void> {
 }
 
 /** Reprocessa NF-e de uma venda já existente (cancela a anterior). */
-export async function reemitNfeForSale(saleId: string): Promise<void> {
+export async function emitFiscalDocumentForSale(
+  saleId: string,
+  documentType: FiscalDocumentType,
+): Promise<void> {
   const sale = await getSaleById(saleId)
   const [client, product] = await Promise.all([
     getClientById(sale.clientId),
     getInventoryItemById(sale.productId),
   ])
-  await emitNfeForSale(
+  await emitFiscalForSale(
     saleId,
+    documentType,
     sale.amount,
     sale.description,
     sale.soldAt,
@@ -588,9 +731,188 @@ export async function reemitNfeForSale(saleId: string): Promise<void> {
       unit: product.unit,
       ncm: product.ncm,
       cfop: product.cfop,
+      cest: product.cest,
       icmsOrigin: product.icmsOrigin,
       icmsSituation: product.icmsSituation,
+      pisSituation: product.pisSituation,
+      cofinsSituation: product.cofinsSituation,
+    },
+  )
+}
+
+export async function reemitNfeForSale(saleId: string): Promise<void> {
+  const sale = await getSaleById(saleId)
+  const [client, product] = await Promise.all([
+    getClientById(sale.clientId),
+    getInventoryItemById(sale.productId),
+  ])
+  await emitFiscalForSale(
+    saleId,
+    'nfe',
+    sale.amount,
+    sale.description,
+    sale.soldAt,
+    client,
+    {
+      sku: product.sku,
+      unit: product.unit,
+      ncm: product.ncm,
+      cfop: product.cfop,
+      cest: product.cest,
+      icmsOrigin: product.icmsOrigin,
+      icmsSituation: product.icmsSituation,
+      pisSituation: product.pisSituation,
+      cofinsSituation: product.cofinsSituation,
     },
     { reissue: true },
+  )
+}
+
+export async function consultFiscalDocumentForSale(saleId: string): Promise<void> {
+  const sale = await getSaleById(saleId)
+  if (!sale.fiscalDocumentId) {
+    throw new AppError('validation', 'Venda ainda nao possui documento fiscal.')
+  }
+  const document = await getFiscalDocumentById(sale.fiscalDocumentId)
+  const result = await consultFiscalDocument(document)
+  await updateFiscalDocumentFromResult(document.id, result)
+  await updateDoc(doc(db, COLLECTION, saleId), {
+    fiscalStatus: result.status,
+    fiscalRef: result.focusRef,
+    updatedAt: serverTimestamp(),
+  })
+}
+
+export async function cancelFiscalDocumentForSale(
+  saleId: string,
+  justification: string,
+): Promise<void> {
+  const sale = await getSaleById(saleId)
+  if (!sale.fiscalDocumentId) {
+    throw new AppError('validation', 'Venda ainda nao possui documento fiscal.')
+  }
+  const document = await getFiscalDocumentById(sale.fiscalDocumentId)
+  const result = await cancelFiscalDocument(document, justification)
+  await updateFiscalDocumentFromResult(document.id, result)
+  await updateDoc(doc(db, COLLECTION, saleId), {
+    fiscalStatus: result.status,
+    fiscalRef: result.focusRef,
+    updatedAt: serverTimestamp(),
+  })
+}
+
+export async function assignDeliveryPerson(
+  saleId: string,
+  deliveryPersonId: string,
+): Promise<void> {
+  const sale = await getSaleById(saleId)
+  if (sale.deliveryStatus === 'delivered' || sale.deliveryStatus === 'cancelled') {
+    throw new AppError(
+      'validation',
+      'Nao e possivel atribuir entregador para entrega finalizada ou cancelada.',
+    )
+  }
+
+  const seller = await getSellerById(deliveryPersonId)
+  if (!seller.active) {
+    throw new AppError('validation', 'Entregador selecionado esta inativo.')
+  }
+
+  try {
+    await updateDoc(doc(db, COLLECTION, saleId), {
+      deliveryPersonId: seller.id,
+      deliveryPersonName: seller.name,
+      deliveryStatus: 'assigned',
+      deliveryAssignedAt: new Date().toISOString(),
+      updatedAt: serverTimestamp(),
+    })
+  } catch (error) {
+    throw toAppError(error, 'Nao foi possivel atribuir o entregador.')
+  }
+}
+
+export async function updateDeliveryStatus(
+  saleId: string,
+  status: DeliveryStatus,
+): Promise<void> {
+  const sale = await getSaleById(saleId)
+  const allowed: Record<DeliveryStatus, DeliveryStatus[]> = {
+    pending: ['assigned', 'cancelled'],
+    assigned: ['out_for_delivery', 'cancelled'],
+    out_for_delivery: ['delivered', 'cancelled'],
+    delivered: [],
+    cancelled: [],
+  }
+
+  if (!allowed[sale.deliveryStatus].includes(status)) {
+    throw new AppError('validation', 'Transicao de entrega invalida.')
+  }
+
+  const patch: Record<string, unknown> = {
+    deliveryStatus: status,
+    updatedAt: serverTimestamp(),
+  }
+
+  if (status === 'out_for_delivery') {
+    patch.deliveryOutAt = new Date().toISOString()
+  }
+  if (status === 'delivered') {
+    patch.deliveredAt = new Date().toISOString()
+  }
+
+  try {
+    await updateDoc(doc(db, COLLECTION, saleId), patch)
+  } catch (error) {
+    throw toAppError(error, 'Nao foi possivel atualizar a entrega.')
+  }
+}
+
+export type DeliveryPersonClosing = {
+  deliveryPersonId: string
+  deliveryPersonName: string
+  deliveries: number
+  salesTotal: number
+  cashTotal: number
+  pixTotal: number
+  creditTotal: number
+  accountabilityTotal: number
+  sales: Sale[]
+}
+
+export async function getDeliveryClosing(date: string): Promise<DeliveryPersonClosing[]> {
+  const sales = (await listSales()).filter(
+    (sale) => sale.soldAt === date && sale.deliveryPersonId,
+  )
+  const groups = new Map<string, DeliveryPersonClosing>()
+
+  for (const sale of sales) {
+    const key = sale.deliveryPersonId ?? ''
+    const current =
+      groups.get(key) ??
+      {
+        deliveryPersonId: key,
+        deliveryPersonName: sale.deliveryPersonName ?? 'Sem entregador',
+        deliveries: 0,
+        salesTotal: 0,
+        cashTotal: 0,
+        pixTotal: 0,
+        creditTotal: 0,
+        accountabilityTotal: 0,
+        sales: [],
+      }
+
+    current.deliveries += sale.deliveryStatus === 'delivered' ? 1 : 0
+    current.salesTotal += sale.amount
+    const totals = addSaleToPaymentTotals(emptySalePaymentTotals(), sale)
+    current.cashTotal += totals.dinheiro
+    current.pixTotal += totals.pix
+    current.creditTotal += totals.fiado
+    current.accountabilityTotal += totals.dinheiro
+    current.sales.push(sale)
+    groups.set(key, current)
+  }
+
+  return Array.from(groups.values()).sort((a, b) =>
+    a.deliveryPersonName.localeCompare(b.deliveryPersonName),
   )
 }

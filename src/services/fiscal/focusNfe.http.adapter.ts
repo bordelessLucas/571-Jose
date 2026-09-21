@@ -1,4 +1,8 @@
-import type { FiscalInvoiceRequest, FiscalInvoiceResult } from '@/domain/types'
+import type {
+  FiscalDocument,
+  FiscalInvoiceRequest,
+  FiscalInvoiceResult,
+} from '@/domain/types'
 import { getAuth } from 'firebase/auth'
 import type { FiscalEmitterPort } from '@/services/fiscal/fiscal.port'
 import { getFocusNfeProxyUrl } from '@/services/fiscal/focusNfe.config'
@@ -10,41 +14,44 @@ type ProxyErrorResponse = {
 
 /** Adapter HTTP real via Cloud Function, mantendo o token Focus no servidor. */
 export class FocusNfeHttpAdapter implements FiscalEmitterPort {
-  async requestInvoice(payload: FiscalInvoiceRequest): Promise<FiscalInvoiceResult> {
-    const focusRef = buildFocusRef(payload.referenceId, Boolean(payload.reissue))
+  private async postProxy(
+    body: Record<string, unknown>,
+    fallbackRef: string,
+  ): Promise<FiscalInvoiceResult> {
     const currentUser = getAuth().currentUser
 
     if (!currentUser) {
       return {
         accepted: false,
         status: 'error',
-        message: 'Usuario nao autenticado para emitir NF-e.',
+        message: 'Usuario nao autenticado para operar documento fiscal.',
         externalId: null,
         protocol: null,
-        focusRef,
+        focusRef: fallbackRef,
         providerMode: 'live',
       }
     }
 
     try {
       const idToken = await currentUser.getIdToken()
-      const response = await fetch(getFocusNfeProxyUrl(), {
+      const response = await fetch(`${getFocusNfeProxyUrl()}/emit`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${idToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body),
       })
 
       const raw = (await response.json().catch(() => ({}))) as
         | FiscalInvoiceResult
         | ProxyErrorResponse
 
-      if (response.ok && 'focusRef' in raw) {
+      if ('focusRef' in raw && 'status' in raw) {
         return {
           ...raw,
-          focusRef: raw.focusRef || focusRef,
+          focusRef: raw.focusRef || fallbackRef,
+          providerMode: 'live',
         }
       }
 
@@ -57,7 +64,7 @@ export class FocusNfeHttpAdapter implements FiscalEmitterPort {
             : `Proxy Focus NFe retornou HTTP ${response.status}.`,
         externalId: null,
         protocol: null,
-        focusRef,
+        focusRef: fallbackRef,
         providerMode: 'live',
         rawResponse: raw,
       }
@@ -73,9 +80,54 @@ export class FocusNfeHttpAdapter implements FiscalEmitterPort {
         message,
         externalId: null,
         protocol: null,
-        focusRef,
+        focusRef: fallbackRef,
         providerMode: 'live',
       }
     }
+  }
+
+  async requestInvoice(payload: FiscalInvoiceRequest): Promise<FiscalInvoiceResult> {
+    const focusRef = buildFocusRef(
+      payload.referenceId,
+      payload.documentType,
+      Boolean(payload.reissue),
+    )
+    return this.postProxy(
+      {
+        action: 'emit',
+        saleId: payload.referenceId,
+        documentType: payload.documentType,
+        reissue: Boolean(payload.reissue),
+      },
+      focusRef,
+    )
+  }
+
+  async getStatus(document: FiscalDocument): Promise<FiscalInvoiceResult> {
+    return this.postProxy(
+      {
+        action: 'status',
+        saleId: document.referenceId,
+        documentType: document.documentType,
+        focusRef: document.focusRef,
+      },
+      document.focusRef,
+    )
+  }
+
+  async cancel(
+    document: FiscalDocument,
+    justification: string,
+  ): Promise<FiscalInvoiceResult> {
+    return this.postProxy(
+      {
+        action: 'cancel',
+        saleId: document.referenceId,
+        documentType: document.documentType,
+        focusRef: document.focusRef,
+        justification,
+      },
+      document.focusRef,
+    )
   }
 }

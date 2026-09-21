@@ -28,7 +28,7 @@ const STATUS_FILTER_OPTIONS = [
 export function AccountsReceivablePage() {
   const [statusFilter, setStatusFilter] =
     useUrlSyncedState<FinancialStatus | 'all'>('status', 'all')
-  const { accounts, loading, error, remove } = useAccountsReceivable(statusFilter)
+  const { accounts, loading, error, remove, pay } = useAccountsReceivable(statusFilter)
   const [pendingDelete, setPendingDelete] = useState<AccountReceivable | null>(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -43,6 +43,26 @@ export function AccountsReceivablePage() {
     } finally {
       setDeleting(false)
     }
+  }
+
+  async function handlePay(row: AccountReceivable) {
+    const discountRaw = window.prompt('Desconto concedido (R$)', '0')
+    if (discountRaw === null) return
+    const discountAmount = Number.parseFloat(discountRaw.replace(',', '.')) || 0
+    const finalAmount = Math.max(row.originalAmount - discountAmount, 0)
+    const paidRaw = window.prompt('Valor recebido (R$)', String(finalAmount))
+    if (paidRaw === null) return
+    const paidAmount = Number.parseFloat(paidRaw.replace(',', '.')) || 0
+    const discountReason =
+      discountAmount > 0
+        ? window.prompt('Motivo do desconto') ?? ''
+        : ''
+
+    await pay(row.id, {
+      discountAmount,
+      paidAmount,
+      discountReason,
+    })
   }
 
   return (
@@ -114,6 +134,12 @@ export function AccountsReceivablePage() {
               render: (row) => formatCurrency(row.amount),
             },
             {
+              key: 'balance',
+              header: 'Saldo',
+              align: 'right',
+              render: (row) => formatCurrency(row.balance),
+            },
+            {
               key: 'status',
               header: 'Status',
               render: (row) => {
@@ -139,6 +165,16 @@ export function AccountsReceivablePage() {
                   <Link to={`/financeiro/receber/${row.id}`}>
                     <Button variant="ghost">Editar</Button>
                   </Link>
+                  {row.status === 'pendente' ? (
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        void handlePay(row)
+                      }}
+                    >
+                      Baixar
+                    </Button>
+                  ) : null}
                   <Button variant="danger" onClick={() => setPendingDelete(row)}>
                     Excluir
                   </Button>

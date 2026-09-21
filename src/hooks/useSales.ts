@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { ClientCommercialInsight, Sale, SaleInput } from '@/domain/types'
+import type {
+  ClientCommercialInsight,
+  DeliveryStatus,
+  FiscalDocumentType,
+  Sale,
+  SaleInput,
+} from '@/domain/types'
 import { AppError } from '@/lib/errors'
 import * as salesService from '@/services/sales.service'
 
@@ -20,7 +26,49 @@ export function useSaleMutations() {
     await salesService.reemitNfeForSale(id)
   }, [])
 
-  return { create, update, remove, reemitNfe }
+  const emitFiscalDocument = useCallback(
+    async (id: string, documentType: FiscalDocumentType) => {
+      await salesService.emitFiscalDocumentForSale(id, documentType)
+    },
+    [],
+  )
+
+  const consultFiscalDocument = useCallback(async (id: string) => {
+    await salesService.consultFiscalDocumentForSale(id)
+  }, [])
+
+  const cancelFiscalDocument = useCallback(
+    async (id: string, justification: string) => {
+      await salesService.cancelFiscalDocumentForSale(id, justification)
+    },
+    [],
+  )
+
+  const assignDeliveryPerson = useCallback(
+    async (id: string, deliveryPersonId: string) => {
+      await salesService.assignDeliveryPerson(id, deliveryPersonId)
+    },
+    [],
+  )
+
+  const updateDeliveryStatus = useCallback(
+    async (id: string, status: DeliveryStatus) => {
+      await salesService.updateDeliveryStatus(id, status)
+    },
+    [],
+  )
+
+  return {
+    create,
+    update,
+    remove,
+    reemitNfe,
+    emitFiscalDocument,
+    consultFiscalDocument,
+    cancelFiscalDocument,
+    assignDeliveryPerson,
+    updateDeliveryStatus,
+  }
 }
 
 export function useSales() {

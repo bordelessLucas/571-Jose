@@ -13,7 +13,13 @@ export type EmitenteConfig = {
   uf: string
   cep: string
   inscricaoEstadual: string
-  regimeTributario: '1' | '2' | '3'
+  regimeTributario: '1' | '2' | '3' | ''
+  serieNfe: string
+  proximoNumeroNfe: string
+  serieNfce: string
+  proximoNumeroNfce: string
+  cscNfce: string
+  idCscNfce: string
 }
 
 function readEnv(key: keyof ImportMetaEnv, fallback = ''): string {
@@ -21,22 +27,12 @@ function readEnv(key: keyof ImportMetaEnv, fallback = ''): string {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback
 }
 
-/**
- * Token Focus NFe.
- * Em modo live no browser o ideal é proxy (Cloud Functions) — token não deve
- * ficar só no frontend em produção. O template permite testar o adapter.
- */
-export function getFocusNfeToken(): string {
-  return readEnv('VITE_FOCUS_NFE_TOKEN', 'FOCUS_NFE_TOKEN_TEMPLATE_REPLACE_ME')
-}
-
 export function getFocusNfeProxyUrl(): string {
-  return readEnv('VITE_FOCUS_NFE_PROXY_URL', '/api/focus/nfe')
+  return readEnv('VITE_FOCUS_NFE_PROXY_URL', '/api/focus')
 }
 
 export function getFocusNfeMode(): FiscalProviderMode {
-  const mode = readEnv('VITE_FOCUS_NFE_MODE', 'mock').toLowerCase()
-  return mode === 'live' ? 'live' : 'mock'
+  return 'live'
 }
 
 export function getFocusNfeEnvironment(): FocusNfeEnvironment {
@@ -51,25 +47,26 @@ export function getFocusNfeBaseUrl(): string {
 }
 
 export function getEmitenteConfig(): EmitenteConfig {
-  return {
-    cnpj: readEnv('VITE_EMITENTE_CNPJ', '00000000000000'),
-    nome: readEnv('VITE_EMITENTE_NOME', 'EMPRESA EMITENTE TEMPLATE LTDA'),
-    nomeFantasia: readEnv('VITE_EMITENTE_NOME_FANTASIA', 'José Gestão'),
-    logradouro: readEnv('VITE_EMITENTE_LOGRADOURO', 'Rua Exemplo'),
-    numero: readEnv('VITE_EMITENTE_NUMERO', '100'),
-    bairro: readEnv('VITE_EMITENTE_BAIRRO', 'Centro'),
-    municipio: readEnv('VITE_EMITENTE_MUNICIPIO', 'São Paulo'),
-    uf: readEnv('VITE_EMITENTE_UF', 'SP'),
-    cep: readEnv('VITE_EMITENTE_CEP', '01001000'),
-    inscricaoEstadual: readEnv('VITE_EMITENTE_IE', 'ISENTO'),
-    regimeTributario: (readEnv('VITE_EMITENTE_REGIME', '1') as '1' | '2' | '3') || '1',
-  }
-}
+  const regime = readEnv('VITE_EMITENTE_REGIME')
 
-export function isFocusTokenTemplate(token: string): boolean {
-  return (
-    !token ||
-    token.includes('TEMPLATE') ||
-    token === 'FOCUS_NFE_TOKEN_TEMPLATE_REPLACE_ME'
-  )
+  return {
+    cnpj: readEnv('VITE_EMITENTE_CNPJ'),
+    nome: readEnv('VITE_EMITENTE_NOME'),
+    nomeFantasia: readEnv('VITE_EMITENTE_NOME_FANTASIA'),
+    logradouro: readEnv('VITE_EMITENTE_LOGRADOURO'),
+    numero: readEnv('VITE_EMITENTE_NUMERO'),
+    bairro: readEnv('VITE_EMITENTE_BAIRRO'),
+    municipio: readEnv('VITE_EMITENTE_MUNICIPIO'),
+    uf: readEnv('VITE_EMITENTE_UF'),
+    cep: readEnv('VITE_EMITENTE_CEP'),
+    inscricaoEstadual: readEnv('VITE_EMITENTE_IE'),
+    regimeTributario:
+      regime === '1' || regime === '2' || regime === '3' ? regime : '',
+    serieNfe: readEnv('VITE_FOCUS_NFE_SERIE_NFE'),
+    proximoNumeroNfe: readEnv('VITE_FOCUS_NFE_PROXIMO_NUMERO_NFE'),
+    serieNfce: readEnv('VITE_FOCUS_NFE_SERIE_NFCE'),
+    proximoNumeroNfce: readEnv('VITE_FOCUS_NFE_PROXIMO_NUMERO_NFCE'),
+    cscNfce: readEnv('VITE_FOCUS_NFE_CSC_NFCE'),
+    idCscNfce: readEnv('VITE_FOCUS_NFE_ID_CSC_NFCE'),
+  }
 }

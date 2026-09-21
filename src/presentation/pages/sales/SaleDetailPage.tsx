@@ -1,10 +1,11 @@
-import { useState, type ReactNode } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useEffect, useState, type ReactNode } from 'react'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { FISCAL_STATUS_LABELS, PAYMENT_METHOD_LABELS } from '@/domain/types'
-import type { PaymentMethod } from '@/domain/types'
+import type { FiscalDocument, FiscalDocumentType, PaymentMethod } from '@/domain/types'
 import { AppError } from '@/lib/errors'
 import { formatCurrency, formatDate, formatDateTime, todayInputValue } from '@/lib/format'
 import { useSale, useSaleMutations } from '@/hooks/useSales'
+import { getFiscalDocumentById } from '@/services/fiscalDocuments.service'
 import { Alert } from '@/presentation/components/ui/Alert'
 import { Button } from '@/presentation/components/ui/Button'
 import { ConfirmDialog } from '@/presentation/components/ui/ConfirmDialog'
@@ -39,12 +40,46 @@ function Field({
 
 export function SaleDetailPage() {
   const { id } = useParams()
+  const location = useLocation()
   const { sale, loading, error, refresh } = useSale(id)
-  const { reemitNfe } = useSaleMutations()
+  const {
+    cancelFiscalDocument,
+    consultFiscalDocument,
+    emitFiscalDocument,
+    reemitNfe,
+  } = useSaleMutations()
+  const [emittingType, setEmittingType] = useState<FiscalDocumentType | null>(null)
+  const [syncingFiscal, setSyncingFiscal] = useState(false)
   const [reemitting, setReemitting] = useState(false)
   const [confirmReemit, setConfirmReemit] = useState(false)
-  const [fiscalMessage, setFiscalMessage] = useState<string | null>(null)
+  const [fiscalDocument, setFiscalDocument] = useState<FiscalDocument | null>(null)
+  const [fiscalMessage, setFiscalMessage] = useState<string | null>(
+    typeof location.state === 'object' &&
+      location.state &&
+      'message' in location.state &&
+      typeof location.state.message === 'string'
+      ? location.state.message
+      : null,
+  )
   const [fiscalError, setFiscalError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!sale?.fiscalDocumentId) {
+      setFiscalDocument(null)
+      return
+    }
+    let active = true
+    void getFiscalDocumentById(sale.fiscalDocumentId)
+      .then((document) => {
+        if (active) setFiscalDocument(document)
+      })
+      .catch(() => {
+        if (active) setFiscalDocument(null)
+      })
+    return () => {
+      active = false
+    }
+  }, [sale?.fiscalDocumentId, sale?.fiscalStatus])
 
   if (loading) {
     return <Spinner />
@@ -79,6 +114,62 @@ export function SaleDetailPage() {
     }
   }
 
+  async function handleEmit(documentType: FiscalDocumentType) {
+    if (!sale) return
+    setEmittingType(documentType)
+    setFiscalError(null)
+    setFiscalMessage(null)
+    try {
+      await emitFiscalDocument(sale.id, documentType)
+      refresh()
+      setFiscalMessage(`${documentType.toUpperCase()} enviada para homologacao.`)
+    } catch (err) {
+      setFiscalError(
+        err instanceof AppError ? err.message : 'Falha ao emitir documento fiscal.',
+      )
+    } finally {
+      setEmittingType(null)
+    }
+  }
+
+  async function handleConsult() {
+    if (!sale) return
+    setSyncingFiscal(true)
+    setFiscalError(null)
+    setFiscalMessage(null)
+    try {
+      await consultFiscalDocument(sale.id)
+      refresh()
+      setFiscalMessage('Situacao fiscal atualizada.')
+    } catch (err) {
+      setFiscalError(
+        err instanceof AppError ? err.message : 'Falha ao consultar documento fiscal.',
+      )
+    } finally {
+      setSyncingFiscal(false)
+    }
+  }
+
+  async function handleCancel() {
+    if (!sale) return
+    const justification = window.prompt('Informe a justificativa de cancelamento.')
+    if (!justification) return
+    setSyncingFiscal(true)
+    setFiscalError(null)
+    setFiscalMessage(null)
+    try {
+      await cancelFiscalDocument(sale.id, justification)
+      refresh()
+      setFiscalMessage('Documento fiscal cancelado.')
+    } catch (err) {
+      setFiscalError(
+        err instanceof AppError ? err.message : 'Falha ao cancelar documento fiscal.',
+      )
+    } finally {
+      setSyncingFiscal(false)
+    }
+  }
+
   return (
     <div className="max-w-3xl">
       <PageHeader
@@ -92,10 +183,46 @@ export function SaleDetailPage() {
             </Link>
             <Button
               variant="secondary"
-              disabled={reemitting}
+              disabled={reemitting || syncingFiscal || Boolean(emittingType)}
+              onClick={() => {
+                void handleEmit('nfe')
+              }}
+            >
+              Emitir NF-e
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={reemitting || syncingFiscal || Boolean(emittingType)}
+              onClick={() => {
+                void handleEmit('nfce')
+              }}
+            >
+              Emitir NFC-e
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={reemitting || syncingFiscal || Boolean(emittingType)}
               onClick={() => setConfirmReemit(true)}
             >
               Reemitir NF-e
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={syncingFiscal || !sale.fiscalDocumentId}
+              onClick={() => {
+                void handleConsult()
+              }}
+            >
+              Consultar situacao
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={syncingFiscal || sale.fiscalStatus !== 'authorized'}
+              onClick={() => {
+                void handleCancel()
+              }}
+            >
+              Cancelar documento
             </Button>
           </div>
         }
@@ -138,6 +265,20 @@ export function SaleDetailPage() {
             </Link>
           ) : null}
         </div>
+        {fiscalDocument?.xmlUrl || fiscalDocument?.pdfUrl ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {fiscalDocument.xmlUrl ? (
+              <a href={fiscalDocument.xmlUrl} target="_blank" rel="noreferrer">
+                <Button variant="ghost">Baixar XML</Button>
+              </a>
+            ) : null}
+            {fiscalDocument.pdfUrl ? (
+              <a href={fiscalDocument.pdfUrl} target="_blank" rel="noreferrer">
+                <Button variant="ghost">Visualizar DANFE/cupom</Button>
+              </a>
+            ) : null}
+          </div>
+        ) : null}
       </section>
 
       <dl className="grid gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:grid-cols-2">
@@ -164,6 +305,9 @@ export function SaleDetailPage() {
         </Field>
         <Field label="Pagamento 1">
           {paymentLabel(sale.paymentMethod1)}
+          {sale.paymentAmount1 > 0
+            ? ` · valor ${formatCurrency(sale.paymentAmount1)}`
+            : ''}
           {sale.paymentFee1 > 0
             ? ` · taxa ${formatCurrency(sale.paymentFee1)}`
             : ''}
@@ -171,6 +315,10 @@ export function SaleDetailPage() {
         <Field label="Pagamento 2">
           {sale.paymentMethod2
             ? `${paymentLabel(sale.paymentMethod2)}${
+                sale.paymentAmount2 > 0
+                  ? ` · valor ${formatCurrency(sale.paymentAmount2)}`
+                  : ''
+              }${
                 sale.paymentFee2 > 0
                   ? ` · taxa ${formatCurrency(sale.paymentFee2)}`
                   : ''

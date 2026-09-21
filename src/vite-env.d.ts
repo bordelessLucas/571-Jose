@@ -8,9 +8,14 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_MESSAGING_SENDER_ID: string
   readonly VITE_FIREBASE_APP_ID: string
   readonly VITE_FIREBASE_MEASUREMENT_ID: string
-  readonly VITE_FOCUS_NFE_MODE: string
   readonly VITE_FOCUS_NFE_ENV: string
-  readonly VITE_FOCUS_NFE_TOKEN: string
+  readonly VITE_FOCUS_NFE_PROXY_URL: string
+  readonly VITE_FOCUS_NFE_SERIE_NFE: string
+  readonly VITE_FOCUS_NFE_PROXIMO_NUMERO_NFE: string
+  readonly VITE_FOCUS_NFE_SERIE_NFCE: string
+  readonly VITE_FOCUS_NFE_PROXIMO_NUMERO_NFCE: string
+  readonly VITE_FOCUS_NFE_CSC_NFCE: string
+  readonly VITE_FOCUS_NFE_ID_CSC_NFCE: string
   readonly VITE_EMITENTE_CNPJ: string
   readonly VITE_EMITENTE_NOME: string
   readonly VITE_EMITENTE_NOME_FANTASIA: string

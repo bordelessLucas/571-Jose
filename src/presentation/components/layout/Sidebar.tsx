@@ -1,16 +1,33 @@
+import {
+  Bank,
+  CashRegister,
+  ChartLineUp,
+  Gauge,
+  Money,
+  Package,
+  Receipt,
+  SignOut,
+  Truck,
+  UserList,
+  UsersThree,
+} from '@phosphor-icons/react'
 import { NavLink } from 'react-router-dom'
 import { Button } from '@/presentation/components/ui/Button'
 
+const ICON_SIZE = 20
+
 const NAV_ITEMS = [
-  { to: '/', label: 'Painel', short: 'P', end: true },
-  { to: '/clientes', label: 'Clientes', short: 'C' },
-  { to: '/vendedores', label: 'Vendedores', short: 'V' },
-  { to: '/vendas', label: 'Vendas', short: 'Vd' },
-  { to: '/despesas', label: 'Despesas', short: 'D' },
-  { to: '/financeiro', label: 'Financeiro', short: 'F' },
-  { to: '/estoque', label: 'Estoque', short: 'E' },
-  { to: '/caixa', label: 'Caixa', short: 'Cx' },
-  { to: '/dre', label: 'DRE', short: 'DR' },
+  { to: '/', label: 'Painel', icon: Gauge, end: true },
+  { to: '/clientes', label: 'Clientes', icon: UserList },
+  { to: '/vendedores', label: 'Vendedores', icon: UsersThree },
+  { to: '/vendas', label: 'Vendas', icon: Receipt },
+  { to: '/entregas', label: 'Entregas', icon: Truck },
+  { to: '/fiscal', label: 'Fiscal', icon: Receipt },
+  { to: '/despesas', label: 'Despesas', icon: Money },
+  { to: '/financeiro', label: 'Financeiro', icon: Bank },
+  { to: '/estoque', label: 'Estoque', icon: Package },
+  { to: '/caixa', label: 'Caixa', icon: CashRegister },
+  { to: '/dre', label: 'DRE', icon: ChartLineUp },
 ] as const
 
 type SidebarProps = {
@@ -30,36 +47,32 @@ export function Sidebar({
 }: SidebarProps) {
   return (
     <aside
-      className={`flex flex-col border-[var(--color-border)] bg-[var(--color-surface)] transition-[width] duration-200 md:min-h-svh md:border-r ${
+      className={`surface-panel flex flex-col border-[var(--color-border)] transition-[width,box-shadow] duration-300 ease-[var(--motion-ease)] md:min-h-svh md:border-r ${
         collapsed
-          ? 'w-full border-b md:w-16 md:border-b-0'
-          : 'w-full border-b md:w-60 md:border-b-0'
+          ? 'w-full border-b md:w-[4.5rem] md:border-b-0'
+          : 'w-full border-b md:w-64 md:border-b-0'
       }`}
     >
       <div
         className={`flex items-center justify-between gap-2 border-b border-[var(--color-border)] ${
-          collapsed ? 'px-2 py-3' : 'px-4 py-5'
+          collapsed ? 'px-3 py-3' : 'px-4 py-5'
         }`}
       >
-        {collapsed ? (
-          <div className="hidden min-w-0 flex-1 text-center md:block">
-            <p
-              className="text-sm font-semibold text-[var(--color-primary)]"
-              title="José — Gestão Comercial"
-            >
-              J
-            </p>
+        <div className={`flex min-w-0 items-center gap-3 ${collapsed ? 'md:justify-center' : ''}`}>
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--color-primary)] text-white shadow-[0_12px_28px_rgb(15_76_92_/_0.18)]">
+            <Truck size={22} weight="duotone" aria-hidden />
           </div>
-        ) : (
-          <div className="min-w-0">
-            <p className="text-xs font-medium tracking-wide text-[var(--color-text-muted)]">
-              José
-            </p>
-            <p className="mt-1 text-lg font-semibold text-[var(--color-primary)]">
-              Gestão Comercial
-            </p>
-          </div>
-        )}
+          {!collapsed ? (
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-[var(--color-text-muted)]">
+                Jose
+              </p>
+              <p className="mt-1 truncate text-lg font-semibold text-[var(--color-primary)]">
+                Gestao Comercial
+              </p>
+            </div>
+          ) : null}
+        </div>
         <Button
           type="button"
           variant="ghost"
@@ -69,53 +82,65 @@ export function Sidebar({
           aria-expanded={!collapsed}
           title={collapsed ? 'Expandir menu' : 'Recolher menu'}
         >
-          {collapsed ? '»' : '«'}
+          <span
+            aria-hidden
+            className={`inline-block transition-transform duration-300 ease-[var(--motion-ease)] ${
+              collapsed ? 'rotate-180' : ''
+            }`}
+          >
+            ‹
+          </span>
         </Button>
       </div>
 
       <nav
-        aria-label="Navegação principal"
+        aria-label="Navegacao principal"
         className={`flex flex-1 gap-1 p-2 ${
           collapsed
             ? 'flex-row overflow-x-auto md:flex-col md:overflow-x-visible'
             : 'flex-row overflow-x-auto md:flex-col'
         }`}
       >
-        {NAV_ITEMS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={'end' in item ? item.end : false}
-            title={item.label}
-            aria-label={item.label}
-            className={({ isActive }) =>
-              `rounded-[var(--radius-md)] text-sm font-medium transition-[background-color,color] duration-150 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${
-                collapsed
-                  ? 'min-w-[2.5rem] px-2 py-2 text-center md:min-w-0 md:px-2'
-                  : 'whitespace-nowrap px-3 py-2'
-              } ${
-                isActive
-                  ? 'bg-[var(--color-primary)] text-white'
-                  : 'text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]'
-              }`
-            }
-          >
-            {collapsed ? (
-              <span className="font-semibold tracking-tight md:text-[13px]" aria-hidden>
-                {item.short}
-              </span>
-            ) : (
-              item.label
-            )}
-          </NavLink>
-        ))}
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={'end' in item ? item.end : false}
+              title={item.label}
+              aria-label={item.label}
+              className={({ isActive }) =>
+                `group relative flex items-center rounded-[var(--radius-md)] text-sm font-medium transition-[background-color,color,box-shadow] duration-150 ease-[var(--motion-ease)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${
+                  collapsed
+                    ? 'min-w-[2.75rem] justify-center px-3 py-2.5 md:min-w-0'
+                    : 'min-w-max gap-3 whitespace-nowrap px-3 py-2.5'
+                } ${
+                  isActive
+                    ? 'bg-[var(--color-primary)] text-white shadow-[0_10px_24px_rgb(15_76_92_/_0.18)]'
+                    : 'text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]'
+                }`
+              }
+            >
+              <Icon
+                size={ICON_SIZE}
+                weight="duotone"
+                aria-hidden
+                className="shrink-0"
+              />
+              {!collapsed ? <span className="truncate">{item.label}</span> : null}
+            </NavLink>
+          )
+        })}
       </nav>
 
       <div
         className={`border-t border-[var(--color-border)] ${collapsed ? 'p-2' : 'p-4'}`}
       >
         {!collapsed ? (
-          <p className="mb-3 truncate text-xs text-[var(--color-text-muted)]">{userEmail}</p>
+          <p className="mb-3 truncate text-xs text-[var(--color-text-muted)]" translate="no">
+            {userEmail}
+          </p>
         ) : null}
         <Button
           type="button"
@@ -126,7 +151,8 @@ export function Sidebar({
           title="Sair da conta"
           aria-label="Sair da conta"
         >
-          {collapsed ? (loggingOut ? '…' : 'Sair') : loggingOut ? 'Saindo…' : 'Sair da conta'}
+          <SignOut size={16} weight="duotone" aria-hidden />
+          {!collapsed ? (loggingOut ? 'Saindo...' : 'Sair da conta') : null}
         </Button>
       </div>
     </aside>

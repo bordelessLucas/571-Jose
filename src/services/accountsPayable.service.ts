@@ -122,6 +122,24 @@ export async function updateAccountPayable(
   }
 }
 
+export async function updateAccountPayableStatus(
+  id: string,
+  status: FinancialStatus,
+): Promise<void> {
+  if (!isStatus(status)) {
+    throw new AppError('validation', 'Status invalido.')
+  }
+
+  try {
+    await updateDoc(doc(db, COLLECTION, id), {
+      status,
+      updatedAt: serverTimestamp(),
+    })
+  } catch (error) {
+    throw toAppError(error, 'Nao foi possivel alterar o status da conta.')
+  }
+}
+
 export async function deleteAccountPayable(id: string): Promise<void> {
   try {
     await deleteDoc(doc(db, COLLECTION, id))

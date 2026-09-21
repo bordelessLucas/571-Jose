@@ -5,8 +5,10 @@
   /* Tokens alinhados a docs-ia/design_system.md */
   --color-bg: #f3f5f7;
   --color-surface: #ffffff;
+  --color-surface-elevated: #fbfdff;
   --color-surface-muted: #e8edf2;
   --color-border: #cfd8e3;
+  --color-border-strong: #b6c4d2;
   --color-text: #1a2332;
   --color-text-muted: #5b6b7c;
   --color-primary: #0f4c5c;
@@ -31,7 +33,10 @@
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
 
-  --focus-ring: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-primary);
+  --shadow-soft: 0 14px 38px rgb(15 76 92 / 0.08);
+  --shadow-panel: 0 1px 2px rgb(26 35 50 / 0.05), 0 18px 50px rgb(15 76 92 / 0.07);
+  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --focus-ring: 0 0 0 2px var(--color-surface), 0 0 0 4px color-mix(in srgb, var(--color-primary), transparent 16%);
 
   font-family: var(--font-sans);
   color: var(--color-text);
@@ -70,12 +75,28 @@ html {
 body {
   margin: 0;
   min-height: 100svh;
+  background:
+    radial-gradient(circle at 12% 8%, rgb(42 157 143 / 0.10), transparent 28rem),
+    linear-gradient(135deg, #f7fafc 0%, var(--color-bg) 42%, #eef4f7 100%);
   touch-action: manipulation;
   padding:
     env(safe-area-inset-top, 0)
     env(safe-area-inset-right, 0)
     env(safe-area-inset-bottom, 0)
     env(safe-area-inset-left, 0);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgb(15 76 92 / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(15 76 92 / 0.035) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: linear-gradient(to bottom, black, transparent 68%);
 }
 
 #root {
@@ -102,4 +123,36 @@ body {
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+.app-enter {
+  animation: app-enter 480ms var(--motion-ease) both;
+}
+
+.surface-panel {
+  background: linear-gradient(180deg, var(--color-surface-elevated), var(--color-surface));
+  box-shadow: var(--shadow-panel);
+}
+
+@keyframes app-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes splash-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  55% {
+    transform: translateX(80%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
 }

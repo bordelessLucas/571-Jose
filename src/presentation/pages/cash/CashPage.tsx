@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom'
 import type { CashMovement } from '@/domain/types'
 import { CASH_MOVEMENT_TYPE_LABELS } from '@/domain/types'
 import { formatCurrency, formatDate } from '@/lib/format'
+import { calculateSalePaymentTotals } from '@/lib/salePaymentTotals'
 import { useCash } from '@/hooks/useCash'
+import { useSales } from '@/hooks/useSales'
 import { Alert } from '@/presentation/components/ui/Alert'
 import { Button } from '@/presentation/components/ui/Button'
 import { ConfirmDialog } from '@/presentation/components/ui/ConfirmDialog'
@@ -14,6 +16,7 @@ import { StatusBadge } from '@/presentation/components/ui/StatusBadge'
 
 export function CashPage() {
   const { movements, balance, loading, error, remove } = useCash()
+  const { sales } = useSales()
   const [pendingDelete, setPendingDelete] = useState<CashMovement | null>(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -27,6 +30,16 @@ export function CashPage() {
       setDeleting(false)
     }
   }
+
+  const today = new Date().toISOString().slice(0, 10)
+  const todaySales = sales.filter((sale) => sale.soldAt === today)
+  const paymentTotals = calculateSalePaymentTotals(todaySales)
+  const cashTotal = paymentTotals.dinheiro
+  const pixTotal = paymentTotals.pix
+  const creditTotal = paymentTotals.fiado
+  const deliveredCount = todaySales.filter(
+    (sale) => sale.deliveryStatus === 'delivered',
+  ).length
 
   return (
     <div>
@@ -65,6 +78,30 @@ export function CashPage() {
           </div>
         </div>
       ) : null}
+
+      <section className="mb-6 surface-panel rounded-[var(--radius-lg)] border border-[var(--color-border)] p-4">
+        <h2 className="text-lg font-semibold text-[var(--color-text)]">
+          Fechamento operacional de hoje
+        </h2>
+        <div className="mt-3 grid gap-3 sm:grid-cols-4">
+          <div>
+            <p className="text-[13px] text-[var(--color-text-muted)]">Dinheiro</p>
+            <p className="font-mono font-semibold">{formatCurrency(cashTotal)}</p>
+          </div>
+          <div>
+            <p className="text-[13px] text-[var(--color-text-muted)]">PIX</p>
+            <p className="font-mono font-semibold">{formatCurrency(pixTotal)}</p>
+          </div>
+          <div>
+            <p className="text-[13px] text-[var(--color-text-muted)]">Fiado</p>
+            <p className="font-mono font-semibold">{formatCurrency(creditTotal)}</p>
+          </div>
+          <div>
+            <p className="text-[13px] text-[var(--color-text-muted)]">Entregas</p>
+            <p className="font-mono font-semibold">{deliveredCount}</p>
+          </div>
+        </div>
+      </section>
 
       {loading ? <Spinner /> : null}
 

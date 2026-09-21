@@ -43,5 +43,9 @@ service cloud.firestore {
     match /fiscalDocuments/{id} {
       allow read, write: if isSignedIn();
     }
+
+    match /fiscalEmissionLocks/{id} {
+      allow read, write: if false;
+    }
   }
 }

@@ -1,57 +1,10 @@
-import type { FiscalInvoiceRequest } from '@/domain/types'
-import { getEmitenteConfig } from '@/services/fiscal/focusNfe.config'
+import type { FiscalDocumentType, FiscalInvoiceRequest } from '@/domain/types'
+import {
+  getEmitenteConfig,
+  getFocusNfeEnvironment,
+} from '@/services/fiscal/focusNfe.config'
 
-/** Payload mínimo alinhado à API Focus NFe /v2/nfe (NF-e 4.00). */
-export type FocusNfePayload = {
-  natureza_operacao: string
-  data_emissao: string
-  tipo_documento: '1'
-  local_destino: '1'
-  finalidade_emissao: '1'
-  consumidor_final: '1'
-  presenca_comprador: '9'
-  cnpj_emitente: string
-  nome_emitente: string
-  nome_fantasia_emitente: string
-  logradouro_emitente: string
-  numero_emitente: string
-  bairro_emitente: string
-  municipio_emitente: string
-  uf_emitente: string
-  cep_emitente: string
-  inscricao_estadual_emitente: string
-  regime_tributario_emitente: string
-  nome_destinatario: string
-  cpf_destinatario?: string
-  cnpj_destinatario?: string
-  indicador_inscricao_estadual_destinatario: '1' | '2' | '9'
-  inscricao_estadual_destinatario?: string
-  logradouro_destinatario: string
-  numero_destinatario: string
-  bairro_destinatario: string
-  municipio_destinatario: string
-  uf_destinatario: string
-  cep_destinatario: string
-  pais_destinatario: string
-  telefone_destinatario?: string
-  modalidade_frete: '9'
-  items: Array<{
-    numero_item: string
-    codigo_produto: string
-    descricao: string
-    cfop: string
-    unidade_comercial: string
-    quantidade_comercial: string
-    valor_unitario_comercial: string
-    valor_unitario_tributavel: string
-    unidade_tributavel: string
-    codigo_ncm: string
-    quantidade_tributavel: string
-    valor_bruto: string
-    icms_origem: string
-    icms_situacao_tributaria: string
-  }>
-}
+export type FocusPayload = Record<string, unknown>
 
 function onlyDigits(value: string): string {
   return value.replace(/\D/g, '')
@@ -66,18 +19,72 @@ function formatMoney(value: number): string {
   return value.toFixed(2)
 }
 
-/**
- * Mapeia a venda do domínio para o contrato Focus NFe.
- * Campos fiscais avançados (CFOP/NCM/CST) usam defaults de template
- * até o cliente definir o perfil tributário.
- */
-export function mapSaleToFocusNfePayload(
-  request: FiscalInvoiceRequest,
-): FocusNfePayload {
+function missing(label: string, value: string | undefined): string[] {
+  return value && value.trim().length > 0 ? [] : [label]
+}
+
+function validateCompany(documentType: FiscalDocumentType): string[] {
+  const emitente = getEmitenteConfig()
+  const issues = [
+    ...missing('CNPJ do emitente ausente', emitente.cnpj),
+    ...missing('nome do emitente ausente', emitente.nome),
+    ...missing('logradouro do emitente ausente', emitente.logradouro),
+    ...missing('numero do emitente ausente', emitente.numero),
+    ...missing('bairro do emitente ausente', emitente.bairro),
+    ...missing('municipio do emitente ausente', emitente.municipio),
+    ...missing('UF do emitente ausente', emitente.uf),
+    ...missing('CEP do emitente ausente', emitente.cep),
+    ...missing('inscricao estadual do emitente ausente', emitente.inscricaoEstadual),
+    ...missing('regime tributario do emitente ausente', emitente.regimeTributario),
+  ]
+
+  if (documentType === 'nfe') {
+    issues.push(...missing('serie NF-e ausente', emitente.serieNfe))
+  }
+
+  if (documentType === 'nfce') {
+    issues.push(...missing('serie NFC-e ausente', emitente.serieNfce))
+    if (getFocusNfeEnvironment() === 'producao') {
+      issues.push(...missing('CSC NFC-e ausente', emitente.cscNfce))
+      issues.push(...missing('ID CSC NFC-e ausente', emitente.idCscNfce))
+    }
+  }
+
+  return issues
+}
+
+export function validateFiscalEmission(request: FiscalInvoiceRequest): string[] {
+  const issues = [
+    ...validateCompany(request.documentType),
+    ...missing('nome do destinatario ausente', request.recipientName),
+    ...missing('documento do destinatario ausente', request.recipientDocument),
+    ...missing('endereco fiscal do destinatario ausente', request.recipientAddress),
+    ...missing('numero fiscal do destinatario ausente', request.recipientAddressNumber),
+    ...missing('bairro fiscal do destinatario ausente', request.recipientDistrict),
+    ...missing('municipio fiscal do destinatario ausente', request.recipientCity),
+    ...missing('UF fiscal do destinatario ausente', request.recipientState),
+    ...missing('CEP fiscal do destinatario ausente', request.recipientZipCode),
+    ...missing('unidade fiscal do produto ausente', request.productUnit),
+    ...missing('NCM ausente', request.productNcm),
+    ...missing('CFOP ausente', request.productCfop),
+    ...missing('origem ICMS ausente', request.productIcmsOrigin),
+    ...missing('CST/CSOSN ausente', request.productIcmsSituation),
+  ]
+
+  if (!(request.amount > 0)) {
+    issues.push('valor da emissao deve ser maior que zero')
+  }
+
+  return issues
+}
+
+export function mapSaleToFocusPayload(request: FiscalInvoiceRequest): FocusPayload {
   const emitente = getEmitenteConfig()
   const doc = onlyDigits(request.recipientDocument)
   const amount = formatMoney(request.amount)
   const isCnpj = doc.length > 11
+  const serie =
+    request.documentType === 'nfce' ? emitente.serieNfce : emitente.serieNfe
 
   return {
     natureza_operacao: 'Venda de mercadoria',
@@ -86,10 +93,11 @@ export function mapSaleToFocusNfePayload(
     local_destino: '1',
     finalidade_emissao: '1',
     consumidor_final: '1',
-    presenca_comprador: '9',
+    presenca_comprador: request.documentType === 'nfce' ? '1' : '9',
+    serie,
     cnpj_emitente: onlyDigits(emitente.cnpj),
     nome_emitente: emitente.nome,
-    nome_fantasia_emitente: emitente.nomeFantasia,
+    nome_fantasia_emitente: emitente.nomeFantasia || emitente.nome,
     logradouro_emitente: emitente.logradouro,
     numero_emitente: emitente.numero,
     bairro_emitente: emitente.bairro,
@@ -99,17 +107,16 @@ export function mapSaleToFocusNfePayload(
     inscricao_estadual_emitente: emitente.inscricaoEstadual,
     regime_tributario_emitente: emitente.regimeTributario,
     nome_destinatario: request.recipientName,
-    ...(isCnpj ? { cnpj_destinatario: doc } : { cpf_destinatario: doc || '00000000000' }),
+    ...(isCnpj ? { cnpj_destinatario: doc } : { cpf_destinatario: doc }),
     indicador_inscricao_estadual_destinatario:
       request.recipientStateRegistrationIndicator ?? '9',
-    inscricao_estadual_destinatario:
-      request.recipientStateRegistration || undefined,
-    logradouro_destinatario: request.recipientAddress || 'Nao informado',
-    numero_destinatario: request.recipientAddressNumber || 'S/N',
-    bairro_destinatario: request.recipientDistrict || 'Centro',
-    municipio_destinatario: request.recipientCity || emitente.municipio,
-    uf_destinatario: request.recipientState || emitente.uf,
-    cep_destinatario: onlyDigits(request.recipientZipCode || emitente.cep),
+    inscricao_estadual_destinatario: request.recipientStateRegistration || undefined,
+    logradouro_destinatario: request.recipientAddress,
+    numero_destinatario: request.recipientAddressNumber,
+    bairro_destinatario: request.recipientDistrict,
+    municipio_destinatario: request.recipientCity,
+    uf_destinatario: request.recipientState,
+    cep_destinatario: onlyDigits(request.recipientZipCode ?? ''),
     pais_destinatario: 'Brasil',
     telefone_destinatario: request.recipientPhone
       ? onlyDigits(request.recipientPhone)
@@ -119,26 +126,34 @@ export function mapSaleToFocusNfePayload(
       {
         numero_item: '1',
         codigo_produto: request.productCode || request.referenceId.slice(0, 12),
-        descricao: request.description || 'Venda comercial',
-        cfop: request.productCfop || '5102',
-        unidade_comercial: request.productUnit || 'UN',
+        descricao: request.description,
+        cfop: request.productCfop,
+        unidade_comercial: request.productUnit,
         quantidade_comercial: '1.0000',
         valor_unitario_comercial: amount,
         valor_unitario_tributavel: amount,
-        unidade_tributavel: request.productUnit || 'UN',
-        codigo_ncm: onlyDigits(request.productNcm || '00000000'),
+        unidade_tributavel: request.productUnit,
+        codigo_ncm: onlyDigits(request.productNcm ?? ''),
+        cest: request.productCest || undefined,
         quantidade_tributavel: '1.0000',
         valor_bruto: amount,
-        icms_origem: request.productIcmsOrigin || '0',
-        icms_situacao_tributaria: request.productIcmsSituation || '102',
+        icms_origem: request.productIcmsOrigin,
+        icms_situacao_tributaria: request.productIcmsSituation,
+        pis_situacao_tributaria: request.productPisSituation || undefined,
+        cofins_situacao_tributaria: request.productCofinsSituation || undefined,
       },
     ],
   }
 }
 
-export function buildFocusRef(saleId: string, reissue = false): string {
+export function buildFocusRef(
+  saleId: string,
+  documentType: FiscalDocumentType,
+  reissue = false,
+): string {
+  const prefix = documentType === 'nfce' ? 'sale-nfce' : 'sale-nfe'
   if (!reissue) {
-    return `sale-${saleId}`
+    return `${prefix}-${saleId}`
   }
-  return `sale-${saleId}-r${Date.now()}`
+  return `${prefix}-${saleId}-r${Date.now()}`
 }

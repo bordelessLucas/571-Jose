@@ -33,7 +33,9 @@ export function fiscalStatusTone(
   switch (status) {
     case 'authorized':
       return 'success'
-    case 'queued':
+    case 'fiscal_configuration_incomplete':
+      return 'warning'
+    case 'processing':
     case 'draft':
       return 'info'
     case 'rejected':

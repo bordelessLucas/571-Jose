@@ -20,7 +20,14 @@ export function useAccountPayableMutations() {
     await accountsPayableService.deleteAccountPayable(id)
   }, [])
 
-  return { create, update, remove }
+  const updateStatus = useCallback(
+    async (id: string, status: FinancialStatus) => {
+      await accountsPayableService.updateAccountPayableStatus(id, status)
+    },
+    [],
+  )
+
+  return { create, update, remove, updateStatus }
 }
 
 export function useAccountsPayable(statusFilter: FinancialStatus | 'all' = 'all') {
@@ -77,7 +84,15 @@ export function useAccountsPayable(statusFilter: FinancialStatus | 'all' = 'all'
     [mutations, refresh],
   )
 
-  return { accounts, loading, error, refresh, create, update, remove }
+  const updateStatus = useCallback(
+    async (id: string, status: FinancialStatus) => {
+      await mutations.updateStatus(id, status)
+      await refresh()
+    },
+    [mutations, refresh],
+  )
+
+  return { accounts, loading, error, refresh, create, update, remove, updateStatus }
 }
 
 export function useAccountPayable(id: string | undefined) {

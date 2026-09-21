@@ -7,6 +7,7 @@ import {
   getDocs,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   updateDoc,
   where,
@@ -15,6 +16,7 @@ import type {
   AccountReceivable,
   AccountReceivableInput,
   FinancialStatus,
+  ReceivablePaymentInput,
 } from '@/domain/types'
 import { AppError, toAppError } from '@/lib/errors'
 import { db } from '@/services/firebase'
@@ -57,6 +59,14 @@ function mapAccount(
     id,
     description: requireString(data, 'description'),
     amount: requireNumber(data, 'amount'),
+    originalAmount: requireNumber(data, 'originalAmount') || requireNumber(data, 'amount'),
+    balance: requireNumber(data, 'balance') || (statusRaw === 'pago' ? 0 : requireNumber(data, 'amount')),
+    discountAmount: requireNumber(data, 'discountAmount'),
+    paidAmount: requireNumber(data, 'paidAmount'),
+    finalAmount: requireNumber(data, 'finalAmount') || requireNumber(data, 'amount'),
+    discountReason: requireString(data, 'discountReason'),
+    discountedBy: requireString(data, 'discountedBy') || null,
+    paidAt: toIsoString(data.paidAt) || null,
     dueDate: requireString(data, 'dueDate'),
     status: isStatus(statusRaw) ? statusRaw : 'pendente',
     clientId: requireString(data, 'clientId'),
@@ -147,6 +157,14 @@ export async function createAccountReceivable(
     const ref = await addDoc(collection(db, COLLECTION), {
       description: input.description.trim(),
       amount: input.amount,
+      originalAmount: input.amount,
+      balance: input.status === 'pago' ? 0 : input.amount,
+      discountAmount: 0,
+      paidAmount: input.status === 'pago' ? input.amount : 0,
+      finalAmount: input.amount,
+      discountReason: '',
+      discountedBy: null,
+      paidAt: input.status === 'pago' ? new Date().toISOString() : null,
       dueDate: input.dueDate,
       status: input.status,
       clientId: input.clientId.trim(),
@@ -171,6 +189,8 @@ export async function updateAccountReceivable(
     await updateDoc(doc(db, COLLECTION, id), {
       description: input.description.trim(),
       amount: input.amount,
+      originalAmount: input.amount,
+      balance: input.status === 'pago' ? 0 : input.amount,
       dueDate: input.dueDate,
       status: input.status,
       clientId: input.clientId.trim(),
@@ -180,6 +200,56 @@ export async function updateAccountReceivable(
     })
   } catch (error) {
     throw toAppError(error, 'Não foi possível atualizar a conta a receber.')
+  }
+}
+
+export async function payAccountReceivable(
+  id: string,
+  input: ReceivablePaymentInput,
+): Promise<void> {
+  if (input.discountAmount < 0 || input.paidAmount <= 0) {
+    throw new AppError('validation', 'Informe pagamento e desconto validos.')
+  }
+
+  try {
+    const accountRef = doc(db, COLLECTION, id)
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(accountRef)
+      if (!snapshot.exists()) {
+        throw new AppError('not_found', 'Conta a receber nao encontrada.')
+      }
+
+      const account = mapAccount(snapshot.id, snapshot.data())
+      if (account.status !== 'pendente') {
+        throw new AppError('validation', 'Conta ja esta baixada ou cancelada.')
+      }
+
+      const finalAmount = Math.max(account.originalAmount - input.discountAmount, 0)
+      if (input.paidAmount < finalAmount) {
+        throw new AppError(
+          'validation',
+          'Valor recebido menor que saldo final apos desconto.',
+        )
+      }
+      if (input.discountAmount > 0 && !input.discountReason.trim()) {
+        throw new AppError('validation', 'Informe o motivo do desconto.')
+      }
+
+      transaction.update(accountRef, {
+        originalAmount: account.originalAmount,
+        balance: 0,
+        discountAmount: input.discountAmount,
+        paidAmount: input.paidAmount,
+        finalAmount,
+        discountReason: input.discountReason.trim(),
+        discountedBy: input.paidBy ?? null,
+        paidAt: new Date().toISOString(),
+        status: 'pago',
+        updatedAt: serverTimestamp(),
+      })
+    })
+  } catch (error) {
+    throw toAppError(error, 'Nao foi possivel baixar a conta a receber.')
   }
 }
 

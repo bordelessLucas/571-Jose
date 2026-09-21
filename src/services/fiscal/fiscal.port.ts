@@ -1,10 +1,11 @@
 import type {
-  FiscalDocumentStatus,
+  FiscalDocument,
   FiscalInvoiceRequest,
   FiscalInvoiceResult,
 } from '@/domain/types'
 
 export interface FiscalEmitterPort {
   requestInvoice(payload: FiscalInvoiceRequest): Promise<FiscalInvoiceResult>
-  getStatus?(externalId: string): Promise<FiscalDocumentStatus>
+  getStatus?(document: FiscalDocument): Promise<FiscalInvoiceResult>
+  cancel?(document: FiscalDocument, justification: string): Promise<FiscalInvoiceResult>
 }

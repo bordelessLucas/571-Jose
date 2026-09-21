@@ -8,9 +8,11 @@ import { CashPage } from '@/presentation/pages/cash/CashPage'
 import { ClientFormPage } from '@/presentation/pages/clients/ClientFormPage'
 import { ClientsPage } from '@/presentation/pages/clients/ClientsPage'
 import { DashboardPage } from '@/presentation/pages/DashboardPage'
+import { DeliveriesPage } from '@/presentation/pages/deliveries/DeliveriesPage'
 import { DrePage } from '@/presentation/pages/dre/DrePage'
 import { ExpenseFormPage } from '@/presentation/pages/expenses/ExpenseFormPage'
 import { ExpensesPage } from '@/presentation/pages/expenses/ExpensesPage'
+import { FiscalDocumentsPage } from '@/presentation/pages/fiscal/FiscalDocumentsPage'
 import { AccountPayableFormPage } from '@/presentation/pages/finance/AccountPayableFormPage'
 import { AccountReceivableFormPage } from '@/presentation/pages/finance/AccountReceivableFormPage'
 import { AccountsPayablePage } from '@/presentation/pages/finance/AccountsPayablePage'
@@ -43,9 +45,11 @@ export function AppRouter() {
           <Route path="vendas/nova" element={<SaleFormPage />} />
           <Route path="vendas/:id" element={<SaleDetailPage />} />
           <Route path="vendas/:id/editar" element={<SaleFormPage />} />
+          <Route path="entregas" element={<DeliveriesPage />} />
           <Route path="despesas" element={<ExpensesPage />} />
           <Route path="despesas/nova" element={<ExpenseFormPage />} />
           <Route path="despesas/:id" element={<ExpenseFormPage />} />
+          <Route path="fiscal" element={<FiscalDocumentsPage />} />
           <Route path="financeiro" element={<FinanceHubPage />} />
           <Route path="financeiro/pagar" element={<AccountsPayablePage />} />
           <Route path="financeiro/pagar/novo" element={<AccountPayableFormPage />} />
