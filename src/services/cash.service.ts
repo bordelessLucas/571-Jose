@@ -12,12 +12,14 @@ import {
 } from 'firebase/firestore'
 import type {
   CashBalanceSummary,
+  CashClosing,
+  CashClosingInput,
   CashMovement,
   CashMovementInput,
   CashMovementType,
 } from '@/domain/types'
 import { AppError, toAppError } from '@/lib/errors'
-import { db } from '@/services/firebase'
+import { auth, db } from '@/services/firebase'
 import {
   mapDocId,
   requireNumber,
@@ -26,6 +28,7 @@ import {
 } from '@/services/firestore.mapper'
 
 const COLLECTION = 'cashMovements'
+const CASH_CLOSING_PROXY_URL = '/api/cash/closing'
 
 const VALID_TYPES: CashMovementType[] = ['entrada', 'saida']
 
@@ -58,6 +61,36 @@ function mapMovement(id: string, data: Record<string, unknown>): CashMovement {
     movementDate: requireString(data, 'movementDate'),
     createdAt: toIsoString(data.createdAt),
     updatedAt: toIsoString(data.updatedAt),
+  }
+}
+
+function mapCashClosing(id: string, data: Record<string, unknown>): CashClosing {
+  const status = requireString(data, 'status')
+  return {
+    id,
+    closingDate: requireString(data, 'closingDate'),
+    expectedCashAmount: requireNumber(data, 'expectedCashAmount'),
+    actualCashAmount: requireNumber(data, 'actualCashAmount'),
+    differenceAmount: requireNumber(data, 'differenceAmount'),
+    salesTotal: requireNumber(data, 'salesTotal'),
+    pixTotal: requireNumber(data, 'pixTotal'),
+    creditTotal: requireNumber(data, 'creditTotal'),
+    deliveriesCount: requireNumber(data, 'deliveriesCount'),
+    notes: requireString(data, 'notes'),
+    closedAt: toIsoString(data.closedAt),
+    reopenedAt: toIsoString(data.reopenedAt) || null,
+    status: status === 'reopened' ? 'reopened' : 'closed',
+    createdAt: toIsoString(data.createdAt),
+    updatedAt: toIsoString(data.updatedAt),
+  }
+}
+
+function validateClosingInput(input: CashClosingInput): void {
+  if (!input.closingDate) {
+    throw new AppError('validation', 'Informe a data do fechamento.')
+  }
+  if (input.expectedCashAmount < 0 || input.actualCashAmount < 0) {
+    throw new AppError('validation', 'Valores de fechamento nao podem ser negativos.')
   }
 }
 
@@ -158,4 +191,72 @@ export async function deleteCashMovement(id: string): Promise<void> {
   } catch (error) {
     throw toAppError(error, 'Não foi possível excluir a movimentação.')
   }
+}
+
+export async function getCashClosingByDate(
+  closingDate: string,
+): Promise<CashClosing | null> {
+  if (!closingDate) return null
+
+  try {
+    return callCashClosingProxy({ action: 'get', closingDate })
+  } catch (error) {
+    throw toAppError(error, 'Nao foi possivel carregar o fechamento de caixa.')
+  }
+}
+
+export async function closeCashDay(input: CashClosingInput): Promise<void> {
+  validateClosingInput(input)
+
+  try {
+    await callCashClosingProxy({
+      action: 'close',
+      closingDate: input.closingDate,
+      actualCashAmount: input.actualCashAmount,
+      notes: input.notes,
+    })
+  } catch (error) {
+    throw toAppError(error, 'Nao foi possivel fechar o caixa.')
+  }
+}
+
+export async function reopenCashDay(closingDate: string): Promise<void> {
+  if (!closingDate) {
+    throw new AppError('validation', 'Informe a data do fechamento.')
+  }
+
+  try {
+    await callCashClosingProxy({ action: 'reopen', closingDate })
+  } catch (error) {
+    throw toAppError(error, 'Nao foi possivel reabrir o caixa.')
+  }
+}
+
+async function callCashClosingProxy(body: Record<string, unknown>): Promise<CashClosing | null> {
+  const currentUser = auth.currentUser
+  if (!currentUser) {
+    throw new AppError('auth', 'Usuario nao autenticado para operar fechamento.')
+  }
+
+  const idToken = await currentUser.getIdToken()
+  const response = await fetch(CASH_CLOSING_PROXY_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+  const raw = (await response.json().catch(() => null)) as
+    | (Record<string, unknown> & { message?: string })
+    | null
+
+  if (!response.ok) {
+    throw new AppError(
+      'network',
+      raw?.message ?? `Fechamento retornou HTTP ${response.status}.`,
+    )
+  }
+  if (!raw) return null
+  return mapCashClosing(String(raw.id ?? raw.closingDate), raw)
 }

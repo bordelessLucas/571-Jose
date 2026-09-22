@@ -8,6 +8,7 @@ initializeApp()
 const firestore = getFirestore()
 
 const focusNfeToken = defineSecret('FOCUS_NFE_TOKEN')
+const focusNfeTokenHomo = defineSecret('FOCUS_NFE_TOKEN_HOMO')
 
 type FocusNfeEnvironment = 'homologacao' | 'producao'
 type FiscalDocumentType = 'nfe' | 'nfce'
@@ -60,12 +61,24 @@ type FocusActionRequest = {
   reissue?: boolean
 }
 
+type CashClosingActionRequest = {
+  action?: 'get' | 'close' | 'reopen'
+  closingDate: string
+  actualCashAmount?: number
+  notes?: string
+}
+
 type SaleRecord = {
   clientId: string
   productId: string
   amount: number
   description: string
   soldAt: string
+  paymentMethod1?: string
+  paymentMethod2?: string
+  paymentAmount1?: number
+  paymentAmount2?: number
+  deliveryStatus?: string
 }
 
 type ClientRecord = {
@@ -98,6 +111,8 @@ type ProductRecord = {
 type FocusHttpResponse = {
   status?: string
   mensagem?: string
+  message?: string
+  erro?: string
   protocolo?: string
   chave_nfe?: string
   chave_nfce?: string
@@ -109,6 +124,7 @@ type FocusHttpResponse = {
   caminho_pdf_cancelamento?: string
   qrcode_url?: string
   erros?: unknown
+  rawText?: string
 }
 
 function env(key: string, fallback = ''): string {
@@ -124,6 +140,10 @@ function stringField(data: FirebaseFirestore.DocumentData, key: string): string 
 function numberField(data: FirebaseFirestore.DocumentData, key: string): number {
   const value = data[key]
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+function isFiscalDocumentType(value: unknown): value is FiscalDocumentType {
+  return value === 'nfe' || value === 'nfce'
 }
 
 function stateRegistrationIndicator(
@@ -172,8 +192,81 @@ function mapFocusStatus(status: string | undefined): FiscalDocumentStatus {
   }
 }
 
+async function parseFocusResponse(response: Response): Promise<FocusHttpResponse> {
+  const text = await response.text().catch(() => '')
+  if (!text.trim()) {
+    return {}
+  }
+
+  try {
+    const parsed = JSON.parse(text) as FocusHttpResponse
+    return {
+      ...parsed,
+      rawText: text,
+    }
+  } catch {
+    return {
+      mensagem: text,
+      rawText: text,
+    }
+  }
+}
+
+function focusMessage(raw: FocusHttpResponse, focusStatus: number): string {
+  if (raw.mensagem?.trim()) return raw.mensagem
+  if (raw.message?.trim()) return raw.message
+  if (raw.erro?.trim()) return raw.erro
+  if (typeof raw.erros === 'string' && raw.erros.trim()) return raw.erros
+  if (raw.erros) return JSON.stringify(raw.erros)
+  if (raw.rawText?.trim()) return raw.rawText
+  return `Focus NFe retornou HTTP ${focusStatus} sem detalhes no corpo da resposta. Consulte a referencia na Focus NFe.`
+}
+
 function missing(label: string, value: string | undefined): string[] {
   return value && value.trim().length > 0 ? [] : [label]
+}
+
+function isMissingFocusToken(token: string): boolean {
+  return !token.trim() || token.trim() === 'CONFIGURE_FOCUS_NFE_TOKEN'
+}
+
+function focusToken(secretToken: string, homologationSecretToken: string): string {
+  const environment = env('FOCUS_NFE_ENV', 'homologacao') as FocusNfeEnvironment
+
+  if (environment !== 'producao') {
+    if (!isMissingFocusToken(homologationSecretToken)) {
+      return homologationSecretToken.trim()
+    }
+    const envHomologationToken = env('FOCUS_NFE_TOKEN_HOMO')
+    if (!isMissingFocusToken(envHomologationToken)) {
+      return envHomologationToken
+    }
+  }
+
+  if (!isMissingFocusToken(secretToken)) {
+    return secretToken.trim()
+  }
+
+  const envToken = environment === 'producao' ? env('FOCUS_NFE_TOKEN_PROD') : ''
+  return envToken || env('FOCUS_NFE_TOKEN')
+}
+
+function hasDigitsLength(value: string | undefined, ...lengths: number[]): boolean {
+  const digits = onlyDigits(value ?? '')
+  return lengths.includes(digits.length)
+}
+
+function hasExactDigits(value: string | undefined, length: number): boolean {
+  return onlyDigits(value ?? '').length === length
+}
+
+function hasPattern(value: string | undefined, pattern: RegExp): boolean {
+  return pattern.test((value ?? '').trim())
+}
+
+function formatIssue(label: string, value: string | undefined, valid: boolean): string[] {
+  if (!value || !value.trim()) return []
+  return valid ? [] : [label]
 }
 
 function validatePayload(request: FiscalInvoiceRequest): string[] {
@@ -201,7 +294,64 @@ function validatePayload(request: FiscalInvoiceRequest): string[] {
     ...missing('CFOP ausente', request.productCfop),
     ...missing('origem ICMS ausente', request.productIcmsOrigin),
     ...missing('CST/CSOSN ausente', request.productIcmsSituation),
+    ...missing('CST PIS ausente', request.productPisSituation),
+    ...missing('CST COFINS ausente', request.productCofinsSituation),
   ]
+
+  issues.push(
+    ...formatIssue(
+      'documento do destinatario deve ter 11 digitos (CPF) ou 14 digitos (CNPJ)',
+      request.recipientDocument,
+      hasDigitsLength(request.recipientDocument, 11, 14),
+    ),
+    ...formatIssue(
+      'CEP fiscal do destinatario deve ter 8 digitos',
+      request.recipientZipCode,
+      hasExactDigits(request.recipientZipCode, 8),
+    ),
+    ...formatIssue(
+      'UF fiscal do destinatario deve ter 2 letras',
+      request.recipientState,
+      hasPattern(request.recipientState, /^[A-Z]{2}$/i),
+    ),
+    ...formatIssue(
+      'NCM deve ter 8 digitos',
+      request.productNcm,
+      hasExactDigits(request.productNcm, 8),
+    ),
+    ...formatIssue(
+      'CFOP deve ter 4 digitos',
+      request.productCfop,
+      hasExactDigits(request.productCfop, 4),
+    ),
+    ...formatIssue(
+      'origem ICMS deve ser um digito de 0 a 8',
+      request.productIcmsOrigin,
+      hasPattern(request.productIcmsOrigin, /^[0-8]$/),
+    ),
+    ...formatIssue(
+      'CST/CSOSN ICMS deve ter 2 ou 3 digitos',
+      request.productIcmsSituation,
+      hasPattern(request.productIcmsSituation, /^\d{2,3}$/),
+    ),
+    ...formatIssue(
+      'CST PIS deve ter 2 digitos',
+      request.productPisSituation,
+      hasPattern(request.productPisSituation, /^\d{2}$/),
+    ),
+    ...formatIssue(
+      'CST COFINS deve ter 2 digitos',
+      request.productCofinsSituation,
+      hasPattern(request.productCofinsSituation, /^\d{2}$/),
+    ),
+  )
+
+  if (
+    request.recipientStateRegistrationIndicator === '1' &&
+    !request.recipientStateRegistration?.trim()
+  ) {
+    issues.push('IE do destinatario obrigatoria para contribuinte')
+  }
 
   if (request.documentType === 'nfe') {
     issues.push(...missing('serie NF-e ausente', env('FOCUS_NFE_SERIE_NFE')))
@@ -309,6 +459,62 @@ async function getDocumentData(collection: string, id: string) {
   return snapshot.data() ?? {}
 }
 
+function isValidClosingDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+}
+
+function addPaymentTotal(
+  totals: Record<string, number>,
+  method: string | undefined,
+  amount: number,
+) {
+  if (!method || !(amount > 0)) return
+  totals[method] = (totals[method] ?? 0) + amount
+}
+
+async function calculateCashClosing(closingDate: string) {
+  const snapshot = await firestore
+    .collection('sales')
+    .where('soldAt', '==', closingDate)
+    .get()
+  const paymentTotals: Record<string, number> = {}
+  let salesTotal = 0
+  let deliveriesCount = 0
+
+  snapshot.forEach((docSnapshot) => {
+    const data = docSnapshot.data()
+    const amount = numberField(data, 'amount')
+    const paymentMethod1 = stringField(data, 'paymentMethod1')
+    const paymentMethod2 = stringField(data, 'paymentMethod2')
+    const paymentAmount1 = numberField(data, 'paymentAmount1')
+    const paymentAmount2 = numberField(data, 'paymentAmount2')
+    const explicitTotal = Math.max(0, paymentAmount1) + Math.max(0, paymentAmount2)
+    salesTotal += amount
+
+    if (explicitTotal > 0) {
+      addPaymentTotal(paymentTotals, paymentMethod1, paymentAmount1)
+      addPaymentTotal(paymentTotals, paymentMethod2, paymentAmount2)
+    } else if (paymentMethod1 && paymentMethod2) {
+      addPaymentTotal(paymentTotals, paymentMethod1, amount / 2)
+      addPaymentTotal(paymentTotals, paymentMethod2, amount / 2)
+    } else {
+      addPaymentTotal(paymentTotals, paymentMethod1, amount)
+    }
+
+    if (stringField(data, 'deliveryStatus') === 'delivered') {
+      deliveriesCount += 1
+    }
+  })
+
+  return {
+    expectedCashAmount: paymentTotals.dinheiro ?? 0,
+    salesTotal,
+    pixTotal: paymentTotals.pix ?? 0,
+    creditTotal: paymentTotals.fiado ?? 0,
+    deliveriesCount,
+  }
+}
+
 async function buildFiscalRequest(input: FocusActionRequest): Promise<FiscalInvoiceRequest> {
   if (!input.saleId) {
     throw new Error('Venda nao informada.')
@@ -403,11 +609,20 @@ function toFiscalResult(args: {
     args.request.documentType === 'nfce'
       ? args.raw.chave_nfce ?? args.raw.chave_nfe ?? null
       : args.raw.chave_nfe ?? null
+  const accepted =
+    args.focusStatus >= 200 &&
+    args.focusStatus < 300 &&
+    Boolean(
+      accessKey ||
+        args.raw.protocolo ||
+        args.raw.status === 'autorizado' ||
+        args.raw.status === 'processando_autorizacao',
+    )
 
   return {
-    accepted: args.focusStatus === 201 || args.focusStatus === 202,
-    status: args.focusStatus === 201 ? 'authorized' : status,
-    message: args.raw.mensagem ?? 'Documento fiscal enviado a Focus NFe.',
+    accepted,
+    status: accessKey ? 'authorized' : status,
+    message: focusMessage(args.raw, args.focusStatus),
     externalId: accessKey,
     protocol: args.raw.protocolo ?? null,
     focusRef: args.ref,
@@ -439,19 +654,37 @@ async function callFocus(args: {
     args.method === 'POST'
       ? `${focusBaseUrl()}/v2/${args.endpoint}?ref=${encodeURIComponent(args.ref)}`
       : `${focusBaseUrl()}/v2/${args.endpoint}/${encodeURIComponent(args.ref)}`
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 25000)
 
-  return fetch(url, {
-    method: args.method,
-    headers: {
-      Authorization: `Basic ${Buffer.from(`${args.token}:`).toString('base64')}`,
-      'Content-Type': 'application/json',
-    },
-    body: args.body ? JSON.stringify(args.body) : undefined,
-  })
+  try {
+    return await fetch(url, {
+      method: args.method,
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${args.token}:`).toString('base64')}`,
+        'Content-Type': 'application/json',
+      },
+      body: args.body ? JSON.stringify(args.body) : undefined,
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(
+        'Focus NFe nao respondeu dentro do tempo limite. Tente consultar ou reenviar em alguns instantes.',
+      )
+    }
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 export const focusFiscal = onRequest(
-  { region: 'southamerica-east1', secrets: [focusNfeToken], cors: true },
+  {
+    region: 'southamerica-east1',
+    secrets: [focusNfeToken, focusNfeTokenHomo],
+    cors: true,
+  },
   async (request, response) => {
     if (request.method !== 'POST') {
       response.status(405).json({ message: 'Metodo nao permitido.' })
@@ -462,8 +695,26 @@ export const focusFiscal = onRequest(
       await assertAuthenticated(request)
 
       const action = request.body as FocusActionRequest
-      const token = focusNfeToken.value()
+      if (!isFiscalDocumentType(action.documentType)) {
+        response.status(400).json({ message: 'Tipo de documento fiscal invalido.' })
+        return
+      }
+
+      const token = focusToken(focusNfeToken.value(), focusNfeTokenHomo.value())
       const endpoint = action.documentType === 'nfce' ? 'nfce' : 'nfe'
+
+      if (isMissingFocusToken(token)) {
+        response.status(422).json({
+          accepted: false,
+          status: 'fiscal_configuration_incomplete',
+          message: 'Configuracao fiscal incompleta: token Focus NFe ausente.',
+          externalId: null,
+          protocol: null,
+          focusRef: action.focusRef ?? '',
+          providerMode: 'live',
+        })
+        return
+      }
 
       if (action.action === 'status' || action.action === 'cancel') {
         if (!action.focusRef) {
@@ -490,7 +741,7 @@ export const focusFiscal = onRequest(
               ? { justificativa: action.justification?.trim() }
               : undefined,
         })
-        const raw = (await focusResponse.json().catch(() => ({}))) as FocusHttpResponse
+        const raw = await parseFocusResponse(focusResponse)
         response.status(200).json(
           toFiscalResult({
             request: {
@@ -565,7 +816,7 @@ export const focusFiscal = onRequest(
         body,
       })
 
-      const raw = (await focusResponse.json().catch(() => ({}))) as FocusHttpResponse
+      const raw = await parseFocusResponse(focusResponse)
       const result = toFiscalResult({
         request: payload,
         ref,
@@ -596,9 +847,7 @@ export const focusFiscal = onRequest(
         ...result,
         accepted: false,
         status: focusResponse.status === 401 ? 'error' : 'rejected',
-        message:
-          raw.mensagem ??
-          `Focus NFe retornou HTTP ${focusResponse.status}. Verifique token/certificado/payload.`,
+        message: focusMessage(raw, focusResponse.status),
       })
     } catch (error) {
       const message =
@@ -616,6 +865,107 @@ export const focusFiscal = onRequest(
         protocol: null,
         focusRef: '',
         providerMode: 'live',
+      })
+    }
+  },
+)
+
+export const cashClosing = onRequest(
+  { region: 'southamerica-east1', cors: true },
+  async (request, response) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ message: 'Metodo nao permitido.' })
+      return
+    }
+
+    try {
+      await assertAuthenticated(request)
+
+      const action = request.body as CashClosingActionRequest
+      const closingDate = action.closingDate
+      if (!isValidClosingDate(closingDate)) {
+        response.status(400).json({ message: 'Data de fechamento invalida.' })
+        return
+      }
+
+      const closingRef = firestore.collection('cashClosings').doc(closingDate)
+
+      if (action.action === 'get' || !action.action) {
+        const snapshot = await closingRef.get()
+        response.status(200).json(snapshot.exists ? { id: snapshot.id, ...snapshot.data() } : null)
+        return
+      }
+
+      if (action.action === 'reopen') {
+        const reopenedAt = new Date().toISOString()
+        await firestore.runTransaction(async (transaction) => {
+          const snapshot = await transaction.get(closingRef)
+          if (!snapshot.exists) {
+            throw new Error('Fechamento de caixa nao encontrado.')
+          }
+          if (snapshot.data()?.status !== 'closed') {
+            throw new Error('Somente fechamento fechado pode ser reaberto.')
+          }
+          transaction.set(
+            closingRef,
+            {
+              status: 'reopened',
+              reopenedAt,
+              updatedAt: reopenedAt,
+            },
+            { merge: true },
+          )
+        })
+        const snapshot = await closingRef.get()
+        response.status(200).json({ id: snapshot.id, ...snapshot.data() })
+        return
+      }
+
+      if (action.action !== 'close') {
+        response.status(400).json({ message: 'Acao de fechamento invalida.' })
+        return
+      }
+
+      const actualCashAmount =
+        typeof action.actualCashAmount === 'number' && Number.isFinite(action.actualCashAmount)
+          ? action.actualCashAmount
+          : NaN
+      if (!(actualCashAmount >= 0)) {
+        response.status(400).json({ message: 'Dinheiro contado invalido.' })
+        return
+      }
+
+      const current = await closingRef.get()
+      const totals = await calculateCashClosing(closingDate)
+      const differenceAmount = actualCashAmount - totals.expectedCashAmount
+      await closingRef.set(
+        {
+          closingDate,
+          ...totals,
+          actualCashAmount,
+          differenceAmount,
+          notes: action.notes?.trim() ?? '',
+          closedAt: new Date().toISOString(),
+          reopenedAt: null,
+          status: 'closed',
+          createdAt: current.exists ? current.data()?.createdAt ?? new Date().toISOString() : new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true },
+      )
+
+      const snapshot = await closingRef.get()
+      response.status(200).json({ id: snapshot.id, ...snapshot.data() })
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message === 'unauthenticated'
+          ? 'Usuario nao autenticado.'
+          : error instanceof Error
+            ? error.message
+            : 'Falha ao operar fechamento de caixa.'
+
+      response.status(message === 'Usuario nao autenticado.' ? 401 : 500).json({
+        message,
       })
     }
   },

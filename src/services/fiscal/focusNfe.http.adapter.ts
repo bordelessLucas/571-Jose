@@ -10,6 +10,27 @@ import { buildFocusRef } from '@/services/fiscal/focusNfe.mapper'
 
 type ProxyErrorResponse = {
   message?: string
+  mensagem?: string
+  error?: string
+}
+
+function hasFiscalResultShape(raw: unknown): raw is FiscalInvoiceResult {
+  return (
+    raw !== null &&
+    typeof raw === 'object' &&
+    'status' in raw &&
+    ('focusRef' in raw || 'message' in raw)
+  )
+}
+
+function responseMessage(
+  raw: FiscalInvoiceResult | ProxyErrorResponse,
+  httpStatus: number,
+): string {
+  if ('message' in raw && raw.message) return raw.message
+  if ('mensagem' in raw && raw.mensagem) return raw.mensagem
+  if ('error' in raw && raw.error) return raw.error
+  return `Proxy Focus NFe respondeu HTTP ${httpStatus}, mas nao retornou uma mensagem fiscal detalhada. Consulte a aba Fiscal ou a Focus pela referencia.`
 }
 
 /** Adapter HTTP real via Cloud Function, mantendo o token Focus no servidor. */
@@ -47,21 +68,23 @@ export class FocusNfeHttpAdapter implements FiscalEmitterPort {
         | FiscalInvoiceResult
         | ProxyErrorResponse
 
-      if ('focusRef' in raw && 'status' in raw) {
+      if (hasFiscalResultShape(raw)) {
         return {
           ...raw,
+          accepted: Boolean(raw.accepted),
+          message: responseMessage(raw, response.status),
+          externalId: raw.externalId ?? null,
+          protocol: raw.protocol ?? null,
           focusRef: raw.focusRef || fallbackRef,
           providerMode: 'live',
+          rawResponse: raw.rawResponse ?? raw,
         }
       }
 
       return {
         accepted: false,
         status: 'error',
-        message:
-          'message' in raw && raw.message
-            ? raw.message
-            : `Proxy Focus NFe retornou HTTP ${response.status}.`,
+        message: responseMessage(raw, response.status),
         externalId: null,
         protocol: null,
         focusRef: fallbackRef,

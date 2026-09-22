@@ -29,15 +29,19 @@ export function AccountsPayablePage() {
   const [pendingDelete, setPendingDelete] = useState<AccountPayable | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const rows = useMemo(() => accounts, [accounts])
 
   async function confirmDelete() {
     if (!pendingDelete) return
     setDeleting(true)
+    setActionError(null)
     try {
       await remove(pendingDelete.id)
       setPendingDelete(null)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Nao foi possivel excluir a conta.')
     } finally {
       setDeleting(false)
     }
@@ -46,8 +50,11 @@ export function AccountsPayablePage() {
   async function handleStatusChange(row: AccountPayable, status: FinancialStatus) {
     if (row.status === status) return
     setUpdatingStatusId(row.id)
+    setActionError(null)
     try {
       await updateStatus(row.id, status)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Nao foi possivel atualizar o status.')
     } finally {
       setUpdatingStatusId(null)
     }
@@ -79,6 +86,7 @@ export function AccountsPayablePage() {
       </div>
 
       {error ? <Alert tone="danger">{error}</Alert> : null}
+      {actionError ? <Alert tone="danger">{actionError}</Alert> : null}
       {loading ? <Spinner /> : null}
 
       {!loading ? (

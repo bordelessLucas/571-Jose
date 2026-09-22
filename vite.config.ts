@@ -17,6 +17,13 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: () => '/focusFiscal',
       },
+      '/api/cash/closing': {
+        target:
+          process.env.VITE_CASH_CLOSING_FUNCTION_ORIGIN ??
+          'https://southamerica-east1-jose-7db7c.cloudfunctions.net',
+        changeOrigin: true,
+        rewrite: () => '/cashClosing',
+      },
     },
   },
   resolve: {

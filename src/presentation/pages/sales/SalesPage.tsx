@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { DotsThreeVertical } from '@phosphor-icons/react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import type { Sale } from '@/domain/types'
 import { FISCAL_STATUS_LABELS } from '@/domain/types'
@@ -16,6 +18,11 @@ import {
   StatusBadge,
   fiscalStatusTone,
 } from '@/presentation/components/ui/StatusBadge'
+
+type ActionsMenuPosition = {
+  top: number
+  left: number
+}
 
 function matchesSaleFilter(sale: Sale, rawFilter: string): boolean {
   const filter = rawFilter.trim().toLowerCase()
@@ -39,6 +46,11 @@ export function SalesPage() {
   const [filter, setFilter] = useUrlSyncedState<string>('q', '')
   const [pendingDelete, setPendingDelete] = useState<Sale | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [openActionsId, setOpenActionsId] = useState<string | null>(null)
+  const [actionsMenuPosition, setActionsMenuPosition] =
+    useState<ActionsMenuPosition | null>(null)
+  const actionsMenuRef = useRef<HTMLDivElement | null>(null)
+  const actionsButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({})
 
   const filteredSales = useMemo(
     () => sales.filter((sale) => matchesSaleFilter(sale, filter)),
@@ -46,6 +58,71 @@ export function SalesPage() {
   )
 
   const today = todayInputValue()
+
+  useEffect(() => {
+    if (!openActionsId) return undefined
+    const activeActionsId = openActionsId
+
+    function closeActionsMenu(event: MouseEvent) {
+      const target = event.target as Node
+      const button = actionsButtonRefs.current[activeActionsId]
+      if (
+        actionsMenuRef.current?.contains(target) ||
+        button?.contains(target)
+      ) {
+        return
+      }
+      setOpenActionsId(null)
+      setActionsMenuPosition(null)
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setOpenActionsId(null)
+        setActionsMenuPosition(null)
+      }
+    }
+
+    function closeOnViewportChange() {
+      setOpenActionsId(null)
+      setActionsMenuPosition(null)
+    }
+
+    document.addEventListener('mousedown', closeActionsMenu)
+    document.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('resize', closeOnViewportChange)
+    window.addEventListener('scroll', closeOnViewportChange, true)
+
+    return () => {
+      document.removeEventListener('mousedown', closeActionsMenu)
+      document.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('resize', closeOnViewportChange)
+      window.removeEventListener('scroll', closeOnViewportChange, true)
+    }
+  }, [openActionsId])
+
+  function toggleActionsMenu(row: Sale) {
+    if (openActionsId === row.id) {
+      setOpenActionsId(null)
+      setActionsMenuPosition(null)
+      return
+    }
+
+    const button = actionsButtonRefs.current[row.id]
+    const rect = button?.getBoundingClientRect()
+    if (!rect) return
+
+    const menuWidth = 176
+    const margin = 12
+    setActionsMenuPosition({
+      top: rect.bottom + 8,
+      left: Math.min(
+        Math.max(margin, rect.right - menuWidth),
+        window.innerWidth - menuWidth - margin,
+      ),
+    })
+    setOpenActionsId(row.id)
+  }
 
   async function confirmDelete() {
     if (!pendingDelete) return
@@ -187,18 +264,18 @@ export function SalesPage() {
               header: 'Ações',
               align: 'right',
               render: (row) => (
-                <div className="flex flex-wrap justify-end gap-2">
-                  <Link to={`/vendas/${row.id}`}>
-                    <Button variant="ghost">Detalhes</Button>
-                  </Link>
-                  <Link to={`/vendas/${row.id}/editar`}>
-                    <Button variant="ghost">Editar</Button>
-                  </Link>
+                <div className="flex min-w-[96px] justify-end">
                   <Button
-                    variant="danger"
-                    onClick={() => setPendingDelete(row)}
+                    ref={(element) => {
+                      actionsButtonRefs.current[row.id] = element
+                    }}
+                    variant="secondary"
+                    className="h-12 w-12 p-0"
+                    aria-label={`Abrir acoes da venda de ${row.clientName}`}
+                    aria-expanded={openActionsId === row.id}
+                    onClick={() => toggleActionsMenu(row)}
                   >
-                    Excluir
+                    <DotsThreeVertical size={28} weight="bold" aria-hidden />
                   </Button>
                 </div>
               ),
@@ -206,6 +283,53 @@ export function SalesPage() {
           ]}
         />
       ) : null}
+
+      {openActionsId && actionsMenuPosition
+        ? createPortal(
+            <div
+              ref={actionsMenuRef}
+              className="fixed z-[1000] w-44 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1 text-left shadow-[var(--shadow-panel)]"
+              style={{
+                top: actionsMenuPosition.top,
+                left: actionsMenuPosition.left,
+              }}
+            >
+              <Link
+                to={`/vendas/${openActionsId}`}
+                className="block rounded-[var(--radius-sm)] px-3 py-2.5 text-sm font-medium text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]"
+                onClick={() => {
+                  setOpenActionsId(null)
+                  setActionsMenuPosition(null)
+                }}
+              >
+                Visualizar
+              </Link>
+              <Link
+                to={`/vendas/${openActionsId}/editar`}
+                className="block rounded-[var(--radius-sm)] px-3 py-2.5 text-sm font-medium text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]"
+                onClick={() => {
+                  setOpenActionsId(null)
+                  setActionsMenuPosition(null)
+                }}
+              >
+                Editar
+              </Link>
+              <button
+                type="button"
+                className="block w-full rounded-[var(--radius-sm)] px-3 py-2.5 text-left text-sm font-medium text-[var(--color-danger)] hover:bg-red-50"
+                onClick={() => {
+                  const sale = sales.find((item) => item.id === openActionsId)
+                  setOpenActionsId(null)
+                  setActionsMenuPosition(null)
+                  if (sale) setPendingDelete(sale)
+                }}
+              >
+                Excluir
+              </button>
+            </div>,
+            document.body,
+          )
+        : null}
 
       <ConfirmDialog
         open={Boolean(pendingDelete)}

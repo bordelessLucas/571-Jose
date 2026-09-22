@@ -16,6 +16,7 @@ import type {
   ClientCommercialInsight,
   DeliveryStatus,
   FiscalDocumentType,
+  FiscalInvoiceResult,
   PaymentMethod,
   Sale,
   SaleInput,
@@ -713,13 +714,13 @@ export async function deleteSale(id: string): Promise<void> {
 export async function emitFiscalDocumentForSale(
   saleId: string,
   documentType: FiscalDocumentType,
-): Promise<void> {
+): Promise<FiscalInvoiceResult> {
   const sale = await getSaleById(saleId)
   const [client, product] = await Promise.all([
     getClientById(sale.clientId),
     getInventoryItemById(sale.productId),
   ])
-  await emitFiscalForSale(
+  return emitFiscalForSale(
     saleId,
     documentType,
     sale.amount,

@@ -52,6 +52,35 @@
 *::before,
 *::after {
   box-sizing: border-box;
+  cursor: default;
+  user-select: none;
+}
+
+a,
+button,
+summary,
+[role='button'],
+[role='link'],
+select,
+label {
+  cursor: pointer;
+}
+
+input,
+textarea,
+[contenteditable='true'],
+.select-text,
+.select-text * {
+  cursor: text;
+  user-select: text;
+}
+
+select,
+button,
+a,
+label,
+summary {
+  user-select: none;
 }
 
 html {

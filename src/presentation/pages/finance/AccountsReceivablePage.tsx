@@ -31,38 +31,63 @@ export function AccountsReceivablePage() {
   const { accounts, loading, error, remove, pay } = useAccountsReceivable(statusFilter)
   const [pendingDelete, setPendingDelete] = useState<AccountReceivable | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [payingId, setPayingId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const rows = useMemo(() => accounts, [accounts])
 
   async function confirmDelete() {
     if (!pendingDelete) return
     setDeleting(true)
+    setActionError(null)
     try {
       await remove(pendingDelete.id)
       setPendingDelete(null)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Nao foi possivel excluir a conta.')
     } finally {
       setDeleting(false)
     }
   }
 
   async function handlePay(row: AccountReceivable) {
+    setActionError(null)
     const discountRaw = window.prompt('Desconto concedido (R$)', '0')
     if (discountRaw === null) return
     const discountAmount = Number.parseFloat(discountRaw.replace(',', '.')) || 0
+    if (discountAmount < 0) {
+      setActionError('O desconto nao pode ser negativo.')
+      return
+    }
+    if (discountAmount > row.originalAmount) {
+      setActionError('O desconto nao pode ser maior que o valor original.')
+      return
+    }
     const finalAmount = Math.max(row.originalAmount - discountAmount, 0)
     const paidRaw = window.prompt('Valor recebido (R$)', String(finalAmount))
     if (paidRaw === null) return
     const paidAmount = Number.parseFloat(paidRaw.replace(',', '.')) || 0
+    if (paidAmount < 0) {
+      setActionError('O valor recebido nao pode ser negativo.')
+      return
+    }
     const discountReason =
       discountAmount > 0
         ? window.prompt('Motivo do desconto') ?? ''
         : ''
 
-    await pay(row.id, {
-      discountAmount,
-      paidAmount,
-      discountReason,
-    })
+    setPayingId(row.id)
+    try {
+      await pay(row.id, {
+        discountAmount,
+        paidAmount,
+        discountReason,
+      })
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Nao foi possivel baixar a conta.')
+    } finally {
+      setPayingId(null)
+    }
   }
 
   return (
@@ -91,6 +116,7 @@ export function AccountsReceivablePage() {
       </div>
 
       {error ? <Alert tone="danger">{error}</Alert> : null}
+      {actionError ? <Alert tone="danger">{actionError}</Alert> : null}
       {loading ? <Spinner /> : null}
 
       {!loading ? (
@@ -168,11 +194,12 @@ export function AccountsReceivablePage() {
                   {row.status === 'pendente' ? (
                     <Button
                       variant="secondary"
+                      disabled={payingId === row.id}
                       onClick={() => {
                         void handlePay(row)
                       }}
                     >
-                      Baixar
+                      {payingId === row.id ? 'Baixando...' : 'Baixar'}
                     </Button>
                   ) : null}
                   <Button variant="danger" onClick={() => setPendingDelete(row)}>

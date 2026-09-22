@@ -258,6 +258,11 @@ export function SaleDetailPage() {
             <p className="mt-2 font-mono text-[13px] text-[var(--color-text-muted)]">
               Ref. Focus: {sale.fiscalRef || '—'}
             </p>
+            {fiscalDocument?.message ? (
+              <p className="mt-3 max-w-2xl text-[13px] text-[var(--color-text-muted)]">
+                {fiscalDocument.message}
+              </p>
+            ) : null}
           </div>
           {sale.receivableId ? (
             <Link to="/financeiro/receber">

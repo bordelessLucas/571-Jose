@@ -30,6 +30,27 @@ function validateInput(input: InventoryItemInput): void {
   if (input.quantity < 0 || !Number.isFinite(input.quantity)) {
     throw new AppError('validation', 'Quantidade invalida.')
   }
+  if (!input.unit.trim()) {
+    throw new AppError('validation', 'Unidade fiscal do produto e obrigatoria.')
+  }
+  if (!/^\d{8}$/.test(input.ncm.replace(/\D/g, ''))) {
+    throw new AppError('validation', 'NCM deve ter 8 digitos.')
+  }
+  if (!/^\d{4}$/.test(input.cfop.replace(/\D/g, ''))) {
+    throw new AppError('validation', 'CFOP deve ter 4 digitos.')
+  }
+  if (!/^[0-8]$/.test(input.icmsOrigin.trim())) {
+    throw new AppError('validation', 'Origem ICMS deve ser um digito de 0 a 8.')
+  }
+  if (!/^\d{2,3}$/.test(input.icmsSituation.trim())) {
+    throw new AppError('validation', 'CST/CSOSN ICMS deve ter 2 ou 3 digitos.')
+  }
+  if (!/^\d{2}$/.test(input.pisSituation.trim())) {
+    throw new AppError('validation', 'CST PIS deve ter 2 digitos.')
+  }
+  if (!/^\d{2}$/.test(input.cofinsSituation.trim())) {
+    throw new AppError('validation', 'CST COFINS deve ter 2 digitos.')
+  }
 }
 
 function mapItem(id: string, data: Record<string, unknown>): InventoryItem {
@@ -60,8 +81,8 @@ function toInventoryPayload(input: InventoryItemInput) {
     quantity: input.quantity,
     unit: input.unit.trim() || 'un',
     defaultUnitPrice: input.defaultUnitPrice,
-    ncm: input.ncm.trim(),
-    cfop: input.cfop.trim(),
+    ncm: input.ncm.replace(/\D/g, ''),
+    cfop: input.cfop.replace(/\D/g, ''),
     cest: input.cest.trim(),
     icmsOrigin: input.icmsOrigin.trim(),
     icmsSituation: input.icmsSituation.trim(),
@@ -83,6 +104,10 @@ export async function listInventoryItems(): Promise<InventoryItem[]> {
 }
 
 export async function getInventoryItemById(id: string): Promise<InventoryItem> {
+  if (!id) {
+    throw new AppError('validation', 'Produto da venda nao informado.')
+  }
+
   try {
     const snapshot = await getDoc(doc(db, COLLECTION, id))
     if (!snapshot.exists()) {

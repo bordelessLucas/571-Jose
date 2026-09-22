@@ -65,6 +65,10 @@ function formatCep(value: string): string {
   return `${digits.slice(0, 5)}-${digits.slice(5)}`
 }
 
+function documentKind(document: string): 'cpf' | 'cnpj' {
+  return onlyDigits(document).length > 11 ? 'cnpj' : 'cpf'
+}
+
 type ClientFormFieldsProps = {
   initial: ClientInput
   isEdit: boolean
@@ -77,6 +81,7 @@ function ClientFormFields({ initial, isEdit, onSubmit }: ClientFormFieldsProps) 
   const [error, setError] = useState<string | null>(null)
   const [cepStatus, setCepStatus] = useState<'idle' | 'loading' | 'found' | 'not_found' | 'error'>('idle')
   const lastCepLookup = useRef('')
+  const currentDocumentKind = documentKind(form.document)
   useUnsavedChanges(!submitting && JSON.stringify(form) !== JSON.stringify(initial))
 
   useEffect(() => {
@@ -154,40 +159,68 @@ function ClientFormFields({ initial, isEdit, onSubmit }: ClientFormFieldsProps) 
         required
       />
       <div className="grid gap-4 md:grid-cols-2">
-        <Input
-          label="Documento"
-          name="document"
-          value={form.document}
-          onChange={(event) =>
-            setForm((prev) => ({ ...prev, document: onlyDigits(event.target.value) }))
-          }
-        />
         <Select
-          label="Indicador IE"
-          name="stateRegistrationIndicator"
-          value={form.stateRegistrationIndicator}
+          label="Tipo de cliente"
+          name="documentKind"
+          value={currentDocumentKind}
           options={[
-            { value: '9', label: 'Nao contribuinte' },
-            { value: '1', label: 'Contribuinte' },
-            { value: '2', label: 'Isento' },
+            { value: 'cpf', label: 'Pessoa fisica (CPF)' },
+            { value: 'cnpj', label: 'Empresa (CNPJ)' },
           ]}
           onChange={(event) =>
             setForm((prev) => ({
               ...prev,
-              stateRegistrationIndicator: event.target
-                .value as ClientInput['stateRegistrationIndicator'],
+              document: '',
+              stateRegistration: '',
+              stateRegistrationIndicator:
+                event.target.value === 'cpf' ? '9' : prev.stateRegistrationIndicator,
             }))
           }
         />
+        <Input
+          label={currentDocumentKind === 'cpf' ? 'CPF' : 'CNPJ'}
+          name="document"
+          value={form.document}
+          maxLength={14}
+          onChange={(event) =>
+            setForm((prev) => ({ ...prev, document: onlyDigits(event.target.value) }))
+          }
+        />
       </div>
-      <Input
-        label="Inscricao estadual"
-        name="stateRegistration"
-        value={form.stateRegistration}
-        onChange={(event) =>
-          setForm((prev) => ({ ...prev, stateRegistration: event.target.value }))
-        }
-      />
+      {currentDocumentKind === 'cnpj' ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          <Select
+            label="Indicador IE"
+            name="stateRegistrationIndicator"
+            value={form.stateRegistrationIndicator}
+            options={[
+              { value: '9', label: 'Nao contribuinte' },
+              { value: '1', label: 'Contribuinte' },
+              { value: '2', label: 'Isento' },
+            ]}
+            onChange={(event) =>
+              setForm((prev) => ({
+                ...prev,
+                stateRegistrationIndicator: event.target
+                  .value as ClientInput['stateRegistrationIndicator'],
+                stateRegistration:
+                  event.target.value === '1' ? prev.stateRegistration : '',
+              }))
+            }
+          />
+          {form.stateRegistrationIndicator === '1' ? (
+            <Input
+              label="Inscricao estadual"
+              name="stateRegistration"
+              value={form.stateRegistration}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, stateRegistration: event.target.value }))
+              }
+              required
+            />
+          ) : null}
+        </div>
+      ) : null}
       <div className="grid gap-4 md:grid-cols-2">
         <Input
           label="E-mail"
@@ -257,6 +290,7 @@ function ClientFormFields({ initial, isEdit, onSubmit }: ClientFormFieldsProps) 
       <Input
         label="CEP"
         name="zipCode"
+        maxLength={9}
         value={form.zipCode}
         hint={
           cepStatus === 'loading'

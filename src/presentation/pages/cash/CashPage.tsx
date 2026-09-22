@@ -1,45 +1,140 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { CashMovement } from '@/domain/types'
+import type { CashClosing, CashMovement } from '@/domain/types'
 import { CASH_MOVEMENT_TYPE_LABELS } from '@/domain/types'
-import { formatCurrency, formatDate } from '@/lib/format'
+import { AppError } from '@/lib/errors'
+import { formatCurrency, formatDate, todayInputValue } from '@/lib/format'
 import { calculateSalePaymentTotals } from '@/lib/salePaymentTotals'
 import { useCash } from '@/hooks/useCash'
 import { useSales } from '@/hooks/useSales'
+import {
+  closeCashDay,
+  getCashClosingByDate,
+  reopenCashDay,
+} from '@/services/cash.service'
 import { Alert } from '@/presentation/components/ui/Alert'
 import { Button } from '@/presentation/components/ui/Button'
 import { ConfirmDialog } from '@/presentation/components/ui/ConfirmDialog'
 import { DataTable } from '@/presentation/components/ui/DataTable'
+import { Input } from '@/presentation/components/ui/Input'
 import { PageHeader } from '@/presentation/components/ui/PageHeader'
 import { Spinner } from '@/presentation/components/ui/Spinner'
 import { StatusBadge } from '@/presentation/components/ui/StatusBadge'
+import { TextArea } from '@/presentation/components/ui/TextArea'
 
 export function CashPage() {
   const { movements, balance, loading, error, remove } = useCash()
   const { sales } = useSales()
   const [pendingDelete, setPendingDelete] = useState<CashMovement | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [closingDate, setClosingDate] = useState(todayInputValue())
+  const [closing, setClosing] = useState<CashClosing | null>(null)
+  const [closingLoading, setClosingLoading] = useState(false)
+  const [closingBusy, setClosingBusy] = useState(false)
+  const [closingError, setClosingError] = useState<string | null>(null)
+  const [actualCashAmount, setActualCashAmount] = useState(0)
+  const [closingNotes, setClosingNotes] = useState('')
+  const [showClosingPanel, setShowClosingPanel] = useState(false)
 
   async function confirmDelete() {
     if (!pendingDelete) return
     setDeleting(true)
+    setClosingError(null)
     try {
       await remove(pendingDelete.id)
       setPendingDelete(null)
+    } catch (err) {
+      setClosingError(
+        err instanceof AppError ? err.message : 'Falha ao excluir movimentacao.',
+      )
     } finally {
       setDeleting(false)
     }
   }
 
-  const today = new Date().toISOString().slice(0, 10)
-  const todaySales = sales.filter((sale) => sale.soldAt === today)
-  const paymentTotals = calculateSalePaymentTotals(todaySales)
+  const daySales = useMemo(
+    () => sales.filter((sale) => sale.soldAt === closingDate),
+    [sales, closingDate],
+  )
+  const paymentTotals = calculateSalePaymentTotals(daySales)
   const cashTotal = paymentTotals.dinheiro
   const pixTotal = paymentTotals.pix
   const creditTotal = paymentTotals.fiado
-  const deliveredCount = todaySales.filter(
+  const salesTotal = daySales.reduce((sum, sale) => sum + sale.amount, 0)
+  const deliveredCount = daySales.filter(
     (sale) => sale.deliveryStatus === 'delivered',
   ).length
+  const differenceAmount = actualCashAmount - cashTotal
+
+  useEffect(() => {
+    let active = true
+    setClosingLoading(true)
+    setClosingError(null)
+
+    void getCashClosingByDate(closingDate)
+      .then((data) => {
+        if (!active) return
+        setClosing(data)
+        setActualCashAmount(data?.actualCashAmount ?? cashTotal)
+        setClosingNotes(data?.notes ?? '')
+      })
+      .catch((err: unknown) => {
+        if (!active) return
+        setClosing(null)
+        setClosingError(
+          err instanceof AppError
+            ? err.message
+            : 'Nao foi possivel carregar o fechamento.',
+        )
+      })
+      .finally(() => {
+        if (active) setClosingLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [closingDate, cashTotal])
+
+  async function handleCloseCash() {
+    if (actualCashAmount < 0) {
+      setClosingError('O dinheiro contado nao pode ser negativo.')
+      return
+    }
+    setClosingBusy(true)
+    setClosingError(null)
+    try {
+      await closeCashDay({
+        closingDate,
+        expectedCashAmount: cashTotal,
+        actualCashAmount,
+        salesTotal,
+        pixTotal,
+        creditTotal,
+        deliveriesCount: deliveredCount,
+        notes: closingNotes,
+      })
+      setClosing(await getCashClosingByDate(closingDate))
+      setShowClosingPanel(false)
+    } catch (err) {
+      setClosingError(err instanceof AppError ? err.message : 'Falha ao fechar caixa.')
+    } finally {
+      setClosingBusy(false)
+    }
+  }
+
+  async function handleReopenCash() {
+    setClosingBusy(true)
+    setClosingError(null)
+    try {
+      await reopenCashDay(closingDate)
+      setClosing(await getCashClosingByDate(closingDate))
+    } catch (err) {
+      setClosingError(err instanceof AppError ? err.message : 'Falha ao reabrir caixa.')
+    } finally {
+      setClosingBusy(false)
+    }
+  }
 
   return (
     <div>
@@ -55,6 +150,7 @@ export function CashPage() {
       />
 
       {error ? <Alert tone="danger">{error}</Alert> : null}
+      {closingError ? <Alert tone="danger">{closingError}</Alert> : null}
 
       {balance ? (
         <div className="mb-6 grid gap-3 sm:grid-cols-3">
@@ -81,8 +177,20 @@ export function CashPage() {
 
       <section className="mb-6 surface-panel rounded-[var(--radius-lg)] border border-[var(--color-border)] p-4">
         <h2 className="text-lg font-semibold text-[var(--color-text)]">
-          Fechamento operacional de hoje
+          Fechamento operacional
         </h2>
+        <div className="mt-3 max-w-xs">
+          <Input
+            label="Data do fechamento"
+            name="closingDate"
+            type="date"
+            value={closingDate}
+            onChange={(event) => {
+              setClosingDate(event.target.value)
+              setShowClosingPanel(false)
+            }}
+          />
+        </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-4">
           <div>
             <p className="text-[13px] text-[var(--color-text-muted)]">Dinheiro</p>
@@ -101,6 +209,82 @@ export function CashPage() {
             <p className="font-mono font-semibold">{deliveredCount}</p>
           </div>
         </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <StatusBadge
+            label={
+              closing?.status === 'closed'
+                ? 'Caixa fechado'
+                : closing?.status === 'reopened'
+                  ? 'Reaberto'
+                  : 'Aberto'
+            }
+            tone={closing?.status === 'closed' ? 'success' : 'warning'}
+          />
+          <Button
+            variant={closing?.status === 'closed' ? 'secondary' : 'primary'}
+            disabled={closingLoading}
+            onClick={() => setShowClosingPanel((value) => !value)}
+          >
+            {showClosingPanel
+              ? 'Ocultar fechamento'
+              : closing?.status === 'closed'
+                ? 'Ver fechamento'
+                : 'Fechar caixa do dia'}
+          </Button>
+        </div>
+
+        {showClosingPanel ? (
+          <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
+            <Input
+              label="Dinheiro contado (R$)"
+              name="actualCashAmount"
+              type="number"
+              min="0"
+              step="0.01"
+              value={actualCashAmount || ''}
+              disabled={closing?.status === 'closed'}
+              onChange={(event) =>
+                setActualCashAmount(Number.parseFloat(event.target.value) || 0)
+              }
+            />
+            <TextArea
+              label="Observacao do fechamento"
+              name="closingNotes"
+              value={closingNotes}
+              disabled={closing?.status === 'closed'}
+              onChange={(event) => setClosingNotes(event.target.value)}
+            />
+            <div className="flex flex-col justify-end gap-2">
+              <p className="text-sm text-[var(--color-text-muted)]">
+                Diferenca:{' '}
+                <span className="font-mono font-semibold text-[var(--color-text)]">
+                  {formatCurrency(differenceAmount)}
+                </span>
+              </p>
+              {closing?.status === 'closed' ? (
+              <Button
+                variant="secondary"
+                disabled={closingBusy || closingLoading}
+                onClick={() => {
+                  void handleReopenCash()
+                }}
+              >
+                Reabrir caixa
+              </Button>
+              ) : (
+              <Button
+                disabled={closingBusy || closingLoading}
+                onClick={() => {
+                  void handleCloseCash()
+                }}
+              >
+                Fechar caixa
+              </Button>
+              )}
+            </div>
+          </div>
+        ) : null}
       </section>
 
       {loading ? <Spinner /> : null}

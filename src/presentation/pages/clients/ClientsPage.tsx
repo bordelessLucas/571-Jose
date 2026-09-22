@@ -61,20 +61,40 @@ export function ClientsPage() {
             </Link>
           }
           columns={[
-            { key: 'name', header: 'Nome', render: (row) => row.name },
-            { key: 'email', header: 'E-mail', render: (row) => row.email || '-' },
-            { key: 'phone', header: 'Telefone', render: (row) => row.phone || '-' },
             {
-              key: 'address',
-              header: 'Endereco',
+              key: 'name',
+              header: 'Nome',
               render: (row) => (
-                <span className="line-clamp-2 max-w-xs">{row.address || '-'}</span>
+                <div className="min-w-[180px]">
+                  <p className="font-medium">{row.name}</p>
+                  <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">
+                    {row.document || 'Sem documento'}
+                  </p>
+                </div>
               ),
             },
             {
-              key: 'document',
-              header: 'Documento',
-              render: (row) => row.document || '-',
+              key: 'contact',
+              header: 'Contato',
+              render: (row) => (
+                <div className="min-w-[190px] text-[13px] leading-5">
+                  <p>{row.phone || '-'}</p>
+                  <p className="truncate text-[var(--color-text-muted)]">
+                    {row.email || 'Sem e-mail'}
+                  </p>
+                </div>
+              ),
+            },
+            {
+              key: 'address',
+              header: 'Endereco fiscal',
+              render: (row) => (
+                <span className="line-clamp-2 max-w-[260px]">
+                  {[row.city, row.state].filter(Boolean).join('/') ||
+                    row.address ||
+                    '-'}
+                </span>
+              ),
             },
             {
               key: 'fiscal',
@@ -91,9 +111,9 @@ export function ClientsPage() {
               header: 'Acoes',
               align: 'right',
               render: (row) => (
-                <div className="flex flex-wrap justify-end gap-2">
+                <div className="flex min-w-[150px] flex-wrap justify-end gap-2">
                   <Link to={`/clientes/${row.id}`}>
-                    <Button variant="ghost">Editar</Button>
+                    <Button variant="secondary">Editar</Button>
                   </Link>
                   <Button variant="danger" onClick={() => setPendingDelete(row)}>
                     Excluir

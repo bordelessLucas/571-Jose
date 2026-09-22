@@ -240,6 +240,35 @@ export type CashMovement = {
   updatedAt: string
 }
 
+export type CashClosing = {
+  id: string
+  closingDate: string
+  expectedCashAmount: number
+  actualCashAmount: number
+  differenceAmount: number
+  salesTotal: number
+  pixTotal: number
+  creditTotal: number
+  deliveriesCount: number
+  notes: string
+  closedAt: string
+  reopenedAt: string | null
+  status: 'closed' | 'reopened'
+  createdAt: string
+  updatedAt: string
+}
+
+export type CashClosingInput = {
+  closingDate: string
+  expectedCashAmount: number
+  actualCashAmount: number
+  salesTotal: number
+  pixTotal: number
+  creditTotal: number
+  deliveriesCount: number
+  notes: string
+}
+
 export type CashMovementInput = {
   type: CashMovementType
   description: string

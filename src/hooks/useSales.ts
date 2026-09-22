@@ -28,7 +28,7 @@ export function useSaleMutations() {
 
   const emitFiscalDocument = useCallback(
     async (id: string, documentType: FiscalDocumentType) => {
-      await salesService.emitFiscalDocumentForSale(id, documentType)
+      return salesService.emitFiscalDocumentForSale(id, documentType)
     },
     [],
   )

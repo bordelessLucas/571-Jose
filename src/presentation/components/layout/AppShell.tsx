@@ -61,7 +61,11 @@ export function AppShell() {
         collapsed={collapsed}
         onToggle={() => setCollapsed((value) => !value)}
       />
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div
+        className={`flex min-w-0 flex-1 flex-col transition-[margin-left] duration-300 ease-[var(--motion-ease)] ${
+          collapsed ? 'md:ml-[4.5rem]' : 'md:ml-64'
+        }`}
+      >
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]/90 px-4 py-2 shadow-[0_10px_30px_rgb(15_76_92_/_0.05)] backdrop-blur-sm md:px-6">
           <div className="flex items-center gap-2">
             <Button

@@ -13,7 +13,8 @@ const variantClass: Record<ButtonVariant, string> = {
   secondary:
     'border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-muted)]',
   danger: 'bg-[var(--color-danger)] text-white shadow-[0_8px_22px_rgb(193_18_31_/_0.14)] hover:opacity-90',
-  ghost: 'bg-transparent text-[var(--color-primary)] hover:bg-[var(--color-surface-muted)]',
+  ghost:
+    'border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] hover:border-[var(--color-primary)] hover:bg-[var(--color-surface-muted)]',
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(

@@ -25,8 +25,23 @@ function validateInput(input: ClientInput): void {
   if (!input.name.trim()) {
     throw new AppError('validation', 'Nome do cliente e obrigatorio.')
   }
+  const document = onlyDigits(input.document)
+  if (document && document.length !== 11 && document.length !== 14) {
+    throw new AppError('validation', 'Documento deve ter 11 digitos (CPF) ou 14 digitos (CNPJ).')
+  }
   if (input.state.trim() && input.state.trim().length !== 2) {
     throw new AppError('validation', 'UF deve ter 2 letras.')
+  }
+  const zipCode = onlyDigits(input.zipCode)
+  if (zipCode && zipCode.length !== 8) {
+    throw new AppError('validation', 'CEP deve ter 8 digitos.')
+  }
+  if (
+    document.length === 14 &&
+    input.stateRegistrationIndicator === '1' &&
+    !input.stateRegistration.trim()
+  ) {
+    throw new AppError('validation', 'Inscricao estadual e obrigatoria para contribuinte.')
   }
 }
 
@@ -87,6 +102,12 @@ function mapClient(id: string, data: Record<string, unknown>): Client {
 }
 
 function toClientPayload(input: ClientInput) {
+  const document = onlyDigits(input.document)
+  const isCpf = document.length === 11
+  const stateRegistrationIndicator = isCpf
+    ? '9'
+    : input.stateRegistrationIndicator || '9'
+
   return {
     name: input.name.trim(),
     email: input.email.trim(),
@@ -97,9 +118,9 @@ function toClientPayload(input: ClientInput) {
     city: input.city.trim(),
     state: input.state.trim().toUpperCase(),
     zipCode: input.zipCode.trim(),
-    document: input.document.trim(),
-    stateRegistration: input.stateRegistration.trim(),
-    stateRegistrationIndicator: input.stateRegistrationIndicator || '9',
+    document,
+    stateRegistration: stateRegistrationIndicator === '1' ? input.stateRegistration.trim() : '',
+    stateRegistrationIndicator,
     notes: input.notes.trim(),
   }
 }

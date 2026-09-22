@@ -115,6 +115,7 @@ function FormFields({ initial, isEdit, onSubmit }: FormFieldsProps) {
           onChange={(event) =>
             setForm((prev) => ({ ...prev, unit: event.target.value.toUpperCase() }))
           }
+          required
         />
         <Input
           label="Preco padrao (R$)"
@@ -136,13 +137,21 @@ function FormFields({ initial, isEdit, onSubmit }: FormFieldsProps) {
           label="NCM"
           name="ncm"
           value={form.ncm}
-          onChange={(event) => setForm((prev) => ({ ...prev, ncm: event.target.value }))}
+          maxLength={8}
+          onChange={(event) =>
+            setForm((prev) => ({ ...prev, ncm: event.target.value.replace(/\D/g, '') }))
+          }
+          required
         />
         <Input
           label="CFOP"
           name="cfop"
           value={form.cfop}
-          onChange={(event) => setForm((prev) => ({ ...prev, cfop: event.target.value }))}
+          maxLength={4}
+          onChange={(event) =>
+            setForm((prev) => ({ ...prev, cfop: event.target.value.replace(/\D/g, '') }))
+          }
+          required
         />
         <Input
           label="CEST"
@@ -156,17 +165,27 @@ function FormFields({ initial, isEdit, onSubmit }: FormFieldsProps) {
           label="Origem ICMS"
           name="icmsOrigin"
           value={form.icmsOrigin}
+          maxLength={1}
           onChange={(event) =>
-            setForm((prev) => ({ ...prev, icmsOrigin: event.target.value }))
+            setForm((prev) => ({
+              ...prev,
+              icmsOrigin: event.target.value.replace(/\D/g, ''),
+            }))
           }
+          required
         />
         <Input
           label="CST/CSOSN ICMS"
           name="icmsSituation"
           value={form.icmsSituation}
+          maxLength={3}
           onChange={(event) =>
-            setForm((prev) => ({ ...prev, icmsSituation: event.target.value }))
+            setForm((prev) => ({
+              ...prev,
+              icmsSituation: event.target.value.replace(/\D/g, ''),
+            }))
           }
+          required
         />
       </div>
       <div className="grid gap-4 md:grid-cols-2">
@@ -174,17 +193,27 @@ function FormFields({ initial, isEdit, onSubmit }: FormFieldsProps) {
           label="CST PIS"
           name="pisSituation"
           value={form.pisSituation}
+          maxLength={2}
           onChange={(event) =>
-            setForm((prev) => ({ ...prev, pisSituation: event.target.value }))
+            setForm((prev) => ({
+              ...prev,
+              pisSituation: event.target.value.replace(/\D/g, ''),
+            }))
           }
+          required
         />
         <Input
           label="CST COFINS"
           name="cofinsSituation"
           value={form.cofinsSituation}
+          maxLength={2}
           onChange={(event) =>
-            setForm((prev) => ({ ...prev, cofinsSituation: event.target.value }))
+            setForm((prev) => ({
+              ...prev,
+              cofinsSituation: event.target.value.replace(/\D/g, ''),
+            }))
           }
+          required
         />
       </div>
       <TextArea

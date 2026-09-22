@@ -9,7 +9,17 @@
     "rewrites": [
       {
         "source": "/api/focus/emit",
-        "function": "focusFiscal"
+        "function": {
+          "functionId": "focusFiscal",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "/api/cash/closing",
+        "function": {
+          "functionId": "cashClosing",
+          "region": "southamerica-east1"
+        }
       },
       {
         "source": "**",

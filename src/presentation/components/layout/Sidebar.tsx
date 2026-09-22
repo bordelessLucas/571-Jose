@@ -1,5 +1,6 @@
 import {
   Bank,
+  CaretLeft,
   CashRegister,
   ChartLineUp,
   Gauge,
@@ -47,22 +48,22 @@ export function Sidebar({
 }: SidebarProps) {
   return (
     <aside
-      className={`surface-panel flex flex-col border-[var(--color-border)] transition-[width,box-shadow] duration-300 ease-[var(--motion-ease)] md:min-h-svh md:border-r ${
+      className={`surface-panel z-30 flex flex-col border-[var(--color-border)] transition-[width,box-shadow] duration-300 ease-[var(--motion-ease)] md:fixed md:inset-y-0 md:left-0 md:h-svh md:border-r ${
         collapsed
           ? 'w-full border-b md:w-[4.5rem] md:border-b-0'
           : 'w-full border-b md:w-64 md:border-b-0'
       }`}
     >
       <div
-        className={`flex items-center justify-between gap-2 border-b border-[var(--color-border)] ${
-          collapsed ? 'px-3 py-3' : 'px-4 py-5'
+        className={`flex items-center gap-2 border-b border-[var(--color-border)] ${
+          collapsed ? 'justify-center px-2 py-3' : 'justify-between px-4 py-5'
         }`}
       >
-        <div className={`flex min-w-0 items-center gap-3 ${collapsed ? 'md:justify-center' : ''}`}>
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--color-primary)] text-white shadow-[0_12px_28px_rgb(15_76_92_/_0.18)]">
-            <Truck size={22} weight="duotone" aria-hidden />
-          </div>
-          {!collapsed ? (
+        {!collapsed ? (
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--color-primary)] text-white shadow-[0_12px_28px_rgb(15_76_92_/_0.18)]">
+              <Truck size={22} weight="duotone" aria-hidden />
+            </div>
             <div className="min-w-0">
               <p className="text-xs font-medium text-[var(--color-text-muted)]">
                 Jose
@@ -71,25 +72,25 @@ export function Sidebar({
                 Gestao Comercial
               </p>
             </div>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
         <Button
           type="button"
           variant="ghost"
-          className="shrink-0 px-2"
+          className={collapsed ? 'h-10 w-10 p-0' : 'shrink-0 px-2'}
           onClick={onToggle}
           aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
           aria-expanded={!collapsed}
           title={collapsed ? 'Expandir menu' : 'Recolher menu'}
         >
-          <span
+          <CaretLeft
+            size={16}
+            weight="bold"
             aria-hidden
-            className={`inline-block transition-transform duration-300 ease-[var(--motion-ease)] ${
+            className={`transition-transform duration-300 ease-[var(--motion-ease)] ${
               collapsed ? 'rotate-180' : ''
             }`}
-          >
-            ‹
-          </span>
+          />
         </Button>
       </div>
 
@@ -97,8 +98,8 @@ export function Sidebar({
         aria-label="Navegacao principal"
         className={`flex flex-1 gap-1 p-2 ${
           collapsed
-            ? 'flex-row overflow-x-auto md:flex-col md:overflow-x-visible'
-            : 'flex-row overflow-x-auto md:flex-col'
+            ? 'flex-row overflow-x-auto md:flex-col md:overflow-x-visible md:overflow-y-auto'
+            : 'flex-row overflow-x-auto md:flex-col md:overflow-x-visible md:overflow-y-auto'
         }`}
       >
         {NAV_ITEMS.map((item) => {
@@ -145,7 +146,7 @@ export function Sidebar({
         <Button
           type="button"
           variant="secondary"
-          className="w-full"
+          className={collapsed ? 'h-10 w-full p-0' : 'w-full'}
           onClick={onLogout}
           disabled={loggingOut}
           title="Sair da conta"
